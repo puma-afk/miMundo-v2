@@ -1,3 +1,4 @@
+import { mountComments } from '../ui/cardComments';
 import type { GardenGame } from '../../application/gardenGame';
 import { findStory, savedStoryCount, stories } from '../../content/stories';
 import type { GardenStory } from '../../content/stories';
@@ -13,6 +14,8 @@ const controlIcon = (name: 'next' | 'previous' | 'pause' | 'play' | 'save' | 'cl
 }[name]}</svg>`;
 
 type JournalOptions = {
+  visiting?: boolean;
+  comments?: {token?: string};
   gift?: PrivateGift | null;
   pauseWorld: (paused: boolean) => void;
   reducedMotion: () => boolean;
@@ -23,6 +26,7 @@ type JournalOptions = {
 
 export class MemoryJournal {
   private dialog: HTMLDialogElement;
+  private disposeComments: (() => void) | undefined;
   private song: GiftSongPlayer | null = null;
   private active: GardenStory | null = null;
   private page = 0;
@@ -44,6 +48,7 @@ export class MemoryJournal {
     parent.append(this.dialog);
     this.dialog.addEventListener('close', () => {
       this.song?.dispose(); this.song=null;
+      this.disposeComments?.(); this.disposeComments=undefined;
       this.active = null; this.dialog.replaceChildren(); this.options.pauseWorld(false);
       this.returnFocus?.focus({ preventScroll: true });
     }, { signal: this.abort.signal });
@@ -59,11 +64,11 @@ export class MemoryJournal {
       if (event.key === 'ArrowLeft' && this.page > 0) { event.preventDefault(); this.changePage(-1); }
     }, { signal: this.abort.signal });
   }
-  openAlbum(): void { this.song?.dispose(); this.song=null; this.active = null; this.giftStep = null; this.show(); this.renderAlbum(); }
+  openAlbum(): void { this.disposeComments?.(); this.disposeComments=undefined; this.song?.dispose(); this.song=null; this.active = null; this.giftStep = null; this.show(); this.renderAlbum(); }
   openStory(id: string): void {
-    if (this.options.gift && giftStops.indexOf(id as typeof giftStops[number]) > this.completed) return;
+    if (!this.options.visiting && this.options.gift && giftStops.indexOf(id as typeof giftStops[number]) > this.completed) return;
     const story = findStory(id); if (!story) return;
-    const personalized = this.options.gift ? personalizeStory(story, this.options.gift, this.completed) : { story, step: null };
+    const personalized = this.options.gift ? personalizeStory(story, this.options.gift, this.options.visiting ? 4 : this.completed) : { story, step: null };
     this.active = personalized.story; this.giftStep = personalized.step; this.page = 0;
     this.responseDraft = this.game.save.giftProgress?.id === this.options.gift?.id ? this.game.save.giftProgress?.response ?? '' : '';
     this.motion = !this.options.reducedMotion();
@@ -77,29 +82,37 @@ export class MemoryJournal {
   private closeButton(): string { return '<button class="journal-close" aria-label="Cerrar recuerdos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>'; }
   private renderAlbum(): void {
     this.dialog.dataset.birthday = 'false';
+    this.dialog.dataset.gift = 'false'; this.dialog.dataset.proposal = 'false';
     this.dialog.dataset.view = 'album'; this.dialog.removeAttribute('data-theme');
     this.dialog.innerHTML = `
       ${this.closeButton()}
       <section class="journal-album">
-        <header class="album-heading"><div><p class="journal-kicker">EL ÁLBUM DE TU ISLA</p><h2 id="journal-title" tabindex="-1">Pequeñas cosas<br><em>que se quedan.</em></h2><p class="album-intro">Hay una historia escondida en cada rincón.<br>Encuentra su objeto y despierta el recuerdo.</p></div><div class="album-counter"><strong>${savedStoryCount(this.game.save.memoriesRead)}<span> / ${stories.length}</span></strong><small>recuerdos guardados</small></div></header>
+        <header class="album-heading"><div><p class="journal-kicker">EL ÁLBUM DE TU ISLA</p><h2 id="journal-title" tabindex="-1">Pequeñas cosas<br><em>que se quedan.</em></h2><p class="album-intro">Lo que encuentras en tus paseos se queda aquí.</p></div><div class="album-counter"><strong>${savedStoryCount(this.game.save.memoriesRead)}</strong><small>recuerdos guardados</small></div></header>
         <div class="album-grid"></div>
-        <p class="album-footer">Acércate a cada objeto para vivir su historia. Este álbum muestra tu colección.</p>
+        <p class="album-footer">Vuelve a su rincón para revivirlo.</p>
       </section>`;
     const grid = this.dialog.querySelector('.album-grid')!;
-    stories.forEach((story, index) => {
-      if (this.options.gift && giftStops.indexOf(story.id as typeof giftStops[number]) > this.completed) return;
+    stories.forEach((story) => {
+      if (!this.options.visiting && !this.game.save.memoriesRead.includes(story.id)) return;
+      if (!this.options.visiting && this.options.gift && giftStops.indexOf(story.id as typeof giftStops[number]) > this.completed) return;
       const card = document.createElement('article'); card.className = 'memory-card'; card.dataset.theme = story.theme;
       card.setAttribute('aria-label', `${story.object}: ${story.location}`);
       const saved = this.game.save.memoriesRead.includes(story.id);
-      card.innerHTML = `<span class="memory-card-art">${storySymbol(story.theme)}<span class="card-number">0${index + 1}</span><span class="card-orbit"></span></span><span class="memory-card-copy"><span class="card-state ${saved ? 'is-saved' : ''}">${saved ? '✓ GUARDADO' : 'POR LEER'}</span><strong></strong><span class="card-location"></span><span class="card-open">Encuentra su objeto <span aria-hidden="true">◇</span></span></span>`;
+      card.innerHTML = `<span class="memory-card-art" aria-hidden="true">${storySymbol(story.theme)}<span class="card-orbit"></span></span><span class="memory-card-copy"><span class="card-state ${saved ? 'is-saved' : ''}">DESCUBIERTO</span><strong></strong><span class="card-location"></span></span>`;
       card.querySelector('strong')!.textContent = story.title;
       card.querySelector('.card-location')!.textContent = story.location;
       grid.append(card);
     });
+    if (!grid.childElementCount) {
+      const empty = document.createElement('div'); empty.className = 'album-empty';
+      empty.innerHTML = `<span aria-hidden="true">${storySymbol('seed')}</span><h3>Tu historia empieza explorando</h3><p>Un paseo, un encuentro, algo que se queda contigo.</p>`;
+      grid.append(empty);
+    }
     this.bindClose(); this.dialog.scrollTop = 0;
     this.dialog.querySelector<HTMLElement>('#journal-title')!.focus({ preventScroll: true });
   }
   private renderStory(): void {
+    this.disposeComments?.(); this.disposeComments=undefined;
     this.song?.dispose();this.song=null;
     const story = this.active!;
     this.dialog.dataset.birthday = String(this.isBirthday);
@@ -151,6 +164,7 @@ export class MemoryJournal {
       this.song=new GiftSongPlayer(this.options.gift,songIndex,()=>this.options.pauseBackgroundMusic?.());
       this.dialog.querySelector('.story-pagination')!.before(this.song.element);
     }
+    if(this.options.comments) this.disposeComments=mountComments(this.dialog.querySelector('.story-reading')!,story.id,this.options.comments.token);
     this.bindClose(); this.renderPage(); this.dialog.scrollTop = 0;
   }
   private renderPage(): void {
@@ -173,6 +187,8 @@ export class MemoryJournal {
           const seal = document.createElement('div'); seal.className = 'response-seal'; seal.innerHTML = controlIcon('save'); seal.setAttribute('aria-hidden','true');
           const answer = document.createElement('blockquote'); answer.className = 'sealed-answer'; answer.textContent = this.game.save.giftProgress!.response!;
           content.append(seal, answer);
+        } else if (this.options.visiting) {
+          const note=document.createElement('p'); note.className='shared-awaiting'; note.textContent='Esta carta aún espera su respuesta.'; content.append(note);
         } else {
         const label = document.createElement('label'); label.className = 'gift-response-label'; label.htmlFor = 'gift-response'; label.textContent = 'Tu respuesta';
         const field = document.createElement('textarea'); field.id = 'gift-response'; field.className = 'gift-response'; field.maxLength = 500; field.rows = 1; field.placeholder = 'Lo que te diga el corazón…'; field.value = this.responseDraft;
@@ -196,7 +212,7 @@ export class MemoryJournal {
     if (this.giftStep === 3 && this.page === 2 && this.options.canSave()) next.textContent = this.answered ? 'Volver al jardín' : 'Guardar mi respuesta ♡';
     {
       const label = next.textContent ?? 'Continuar'; next.setAttribute('aria-label', label); next.title = label;
-      next.innerHTML = controlIcon(this.page < 2 ? 'next' : this.giftStep === 3 && !this.answered || !saved && this.options.canSave() ? 'save' : 'close');
+      next.innerHTML = controlIcon(this.page < 2 ? 'next' : this.options.canSave() && (this.giftStep === 3 && !this.answered || !saved) ? 'save' : 'close');
     }
     this.dialog.querySelector('.story-save-status')!.textContent = this.page === 2 && saved ? 'Guardado' : '';
     paragraph.tabIndex = -1; paragraph.focus({ preventScroll: true });
@@ -237,5 +253,6 @@ export class MemoryJournal {
     }
   }
   private bindClose(): void { this.dialog.querySelector<HTMLButtonElement>('.journal-close')!.onclick = () => this.dialog.close(); }
-  dispose(): void { this.song?.dispose(); this.abort.abort(); this.dialog.remove(); }
+  dispose(): void { this.disposeComments?.(); this.song?.dispose(); this.abort.abort(); this.dialog.remove(); }
 }
+

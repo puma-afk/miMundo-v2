@@ -4,6 +4,7 @@ import type { SavePort } from './gardenGame.ts';
 
 export type Operation = { id: string; base: number; save: Save };
 export type LocalWorld = {
+  localSavedAt?: string;
   format: 1; save: Save; revision: number | null; dirty: boolean;
   operation: Operation | null; syncedAt: string | null;
   backups: { at: string; save: Save }[];
@@ -18,7 +19,7 @@ export interface CloudWorldPort {
   commit(operation: Operation): Promise<RemoteWorld>;
 }
 export type SyncStatus = 'checking' | 'saved' | 'pending' | 'offline' | 'conflict' | 'incoming' | 'error';
-export const emptyWorld = (): LocalWorld => ({ format: 1, save: freshSave(), revision: null, dirty: false, operation: null, syncedAt: null, backups: [] });
+export const emptyWorld = (createdAt?: number): LocalWorld => ({ format: 1, save: freshSave(createdAt), revision: null, dirty: false, operation: null, syncedAt: null, backups: [] });
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Local commits are serialized; network requests never hold the local write queue. */
@@ -37,6 +38,7 @@ export class CloudSync implements SavePort {
   get pending(): boolean { return !!this.local?.dirty; }
   get canAdoptGuest(): boolean { return this.status === 'saved' && this.local?.revision === 0 && !this.pending; }
   get syncedAt(): string | null { return this.local?.syncedAt ?? null; }
+  get localSavedAt(): string | null { return this.local?.localSavedAt ?? null; }
   get backups(): LocalWorld['backups'] { return structuredClone(this.local?.backups ?? []); }
   private exclusive<T>(action: () => Promise<T>): Promise<T> {
     const next = this.queue.then(action); this.queue = next.catch(() => {}); return next;
@@ -48,7 +50,7 @@ export class CloudSync implements SavePort {
   async read(): Promise<Save> {
     return this.exclusive(async () => {
       this.local = await this.store.read();
-      if (!this.local) await this.persist(emptyWorld());
+      if (!this.local) await this.persist({ ...emptyWorld(Date.now()), localSavedAt: new Date().toISOString() });
       this.report(this.pending ? 'pending' : 'checking', this.pending ? 'Cambios guardados aquí, pendientes de enviar.' : 'Comprobando tu cuenta…');
       return structuredClone(this.local!.save);
     });
@@ -57,7 +59,7 @@ export class CloudSync implements SavePort {
     await this.exclusive(async () => {
       if (!this.local) throw new Error('Abre primero tu jardín.');
       if (this.status === 'incoming') throw new Error('Tu cuenta tiene otro jardín. Abre «Mi cuenta» para recuperarlo primero.');
-      await this.persist({ ...this.local, save: structuredClone(save), dirty: true });
+      await this.persist({ ...this.local, save: structuredClone(save), dirty: true, localSavedAt: new Date().toISOString() });
       if (this.status !== 'conflict') this.report('pending', 'Guardado en este dispositivo. Preparando la copia en tu cuenta…');
       else this.onChange();
     });
@@ -119,7 +121,7 @@ export class CloudSync implements SavePort {
       const discarded = choice === 'cloud' ? this.local.save : remote?.save;
       const backups = discarded ? [...this.local.backups, { at: new Date().toISOString(), save: structuredClone(discarded) }].slice(-5) : this.local.backups;
       const save = choice === 'cloud' ? remote!.save : this.local.save;
-      await this.persist({ ...this.local, save: structuredClone(save), revision: remote?.revision ?? 0,
+      await this.persist({ ...this.local, save: structuredClone(save), localSavedAt: new Date().toISOString(), revision: remote?.revision ?? 0,
         operation: null, dirty: choice === 'local', syncedAt: choice === 'cloud' ? remote!.updatedAt : this.local.syncedAt, backups });
       this.remote = remote;
       this.report(choice === 'cloud' ? 'saved' : 'pending', choice === 'cloud' ? 'Jardín recuperado de tu cuenta.' : 'Tu elección está guardada aquí; falta enviarla a tu cuenta.');

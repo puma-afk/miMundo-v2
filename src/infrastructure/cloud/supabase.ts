@@ -4,7 +4,7 @@ import type { CloudWorldPort, Operation, RemoteWorld } from '../../application/c
 import { validateGarden } from '../persistence/accountStore';
 
 // Bound every network request so offline play and closing a dialog never hang indefinitely.
-const boundedFetch: typeof fetch = (input, init) => {
+export const boundedFetch: typeof fetch = (input, init) => {
   const controller = new AbortController();
   const abort = () => controller.abort();
   if (init?.signal?.aborted) abort();

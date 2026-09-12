@@ -18,11 +18,14 @@ export class AccountPanel {
   private resendAt = 0;
   private abort = new AbortController();
   private busy = false;
+  private localState: 'ready' | 'saving' | 'error' = 'ready';
+  private localAt: string | null = null;
+  private localError = '';
   private chosen: 'cloud' | 'local' | null = null;
   constructor(private user: User | null, private sync: CloudSync | null, pause: (paused: boolean) => void) {
     this.button = document.createElement('button');
     this.button.id = 'account'; this.button.className = 'icon-button account-button';
-    this.button.textContent = '☁'; this.button.title = 'Mi cuenta'; this.button.setAttribute('aria-label', 'Abrir mi cuenta');
+    this.button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 20 10a4 4 0 0 1-1 8Z"/><path d="m9 13 2 2 4-4"/></svg>'; this.button.title = 'Mi cuenta'; this.button.setAttribute('aria-label', 'Abrir mi cuenta');
     document.querySelector('.toolbar')!.prepend(this.button);
     this.dialog = document.createElement('dialog'); this.dialog.id = 'account-dialog'; this.dialog.className = 'settings-dialog account-dialog';
     this.dialog.setAttribute('aria-labelledby', 'account-title');
@@ -30,6 +33,7 @@ export class AccountPanel {
       <button class="dialog-close icon-button" id="account-close" aria-label="Cerrar mi cuenta">×</button>
       <div class="account-sigil" aria-hidden="true">☁ ✧</div>
       <div class="eyebrow">UN HOGAR PARA TUS RECUERDOS</div><h2 id="account-title">Tu mundo, contigo</h2>
+      <div class="save-overview" id="account-save-overview" role="status"></div>
       <section id="account-login">
         <button id="account-google" class="google-login" type="button"><span aria-hidden="true">G</span> Continuar con Google <span aria-hidden="true">↗</span></button>
         <p class="muted">Entra con tu correo para llevar tu jardín a otro dispositivo. También puedes seguir jugando sin cuenta.</p>
@@ -61,9 +65,12 @@ export class AccountPanel {
       if (error) throw new Error('No se pudo abrir Google. Comprueba el proveedor y las URL autorizadas en Supabase.');
     });
     const settings = document.querySelector('#settings-dialog .save-actions')!;
-    const accountLink = document.createElement('button'); accountLink.className = 'secondary'; accountLink.textContent = '☁ Mi cuenta'; accountLink.onclick = () => this.button.click(); settings.prepend(accountLink);
+    const accountLink = document.createElement('button'); accountLink.className = 'secondary'; accountLink.textContent = user ? 'Mi cuenta' : 'Conectar con Google'; accountLink.onclick = () => this.button.click(); settings.prepend(accountLink);
     const copy = document.querySelector('#settings-dialog .settings-divider + h3 + p');
     if (copy) copy.textContent = user ? 'Tu jardín se guarda aquí y se sincroniza con tu cuenta. Exporta una copia para conservar un respaldo independiente.' : 'Tu jardín se guarda en este navegador. Entra en Mi cuenta para activar el guardado entre dispositivos, o exporta una copia.';
+    const overview = document.createElement('div'); overview.id = 'settings-save-overview'; overview.className = 'save-overview'; overview.setAttribute('role','status');
+    settings.before(overview);
+    if (copy) copy.textContent = 'El guardado es automático. Exportar crea una copia adicional para ti.';
     const saveState = document.getElementById('save-state')!;
     saveState.setAttribute('role', 'button'); saveState.tabIndex = 0;
     saveState.onclick = () => this.button.click(); saveState.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.button.click(); } };
@@ -120,6 +127,8 @@ export class AccountPanel {
       window.addEventListener('online', () => void sync.sync(), { signal: this.abort.signal });
       document.addEventListener('visibilitychange', () => { if (sync.pending || !document.hidden) void sync.sync(); }, { signal: this.abort.signal });
     }
+    window.addEventListener('offline', () => this.render(), { signal: this.abort.signal });
+    window.addEventListener('online', () => this.render(), { signal: this.abort.signal });
     this.render();
   }
   private feedback(message: string): void { this.dialog.querySelector('#account-feedback')!.textContent = message; }
@@ -137,7 +146,28 @@ export class AccountPanel {
     catch (e) { this.feedback(e instanceof Error ? e.message : 'No se pudo completar. Inténtalo de nuevo.'); }
     finally { this.busy = false; this.dialog.querySelectorAll<HTMLButtonElement>('button').forEach(b => b.disabled = false); this.render(); }
   }
+  updateLocal(state: 'ready' | 'saving' | 'error', at: string | null, error = ''): void {
+    this.localState = state; this.localAt = at; this.localError = error; this.render();
+  }
   private render(): void {
+    const syncState = this.sync;
+    const labels = { checking: 'Comprobando cuenta', saved: 'Guardado en la nube', pending: 'Pendiente de subir', offline: 'Sin conexión · pendiente', error: 'Nube sin confirmar', conflict: 'Elegir versión', incoming: 'Recuperar mi jardín' };
+    const state = this.localState === 'saving' ? 'Guardando en este dispositivo…' : this.localState === 'error' ? 'No se pudo guardar el último cambio' : !navigator.onLine && syncState?.pending ? 'Sin conexión · pendiente de subir' : syncState ? syncState.status === 'saved' && !syncState.syncedAt ? 'Cuenta lista · aún sin copia en la nube' : labels[syncState.status] : 'Guardado en este dispositivo';
+    const format = (at: string | null) => at && Number.isFinite(Date.parse(at)) ? new Intl.DateTimeFormat('es', {dateStyle:'medium', timeStyle:'medium'}).format(new Date(at)) : 'Sin fecha registrada';
+    const local = 'Último guardado aquí: ' + format(syncState?.localSavedAt ?? this.localAt);
+    const cloud = this.user ? 'Última copia confirmada en la nube: ' + (syncState?.syncedAt ? format(syncState.syncedAt) : 'Todavía ninguna') : 'Sin cuenta · esta partida permanece en este navegador';
+    for (const id of ['settings-save-overview', 'account-save-overview']) {
+      const panel = document.getElementById(id); if (!panel) continue;
+      const title = document.createElement('strong'); title.textContent = state;
+      const date = document.createElement('span'); date.textContent = local;
+      const detail = document.createElement('span'); detail.textContent = cloud;
+      panel.replaceChildren(title,date,detail);
+      if(this.localState === 'error') { const note = document.createElement('span'); note.textContent = this.localError; panel.append(note); }
+    }
+    document.getElementById('save-state')!.textContent = state;
+    this.button.dataset.notice = String(this.localState === 'error' || !!syncState && syncState.status !== 'saved');
+    this.button.title = state + ' · ' + local;
+
     if (!this.user || !this.sync) return;
     const sync = this.sync;
     this.dialog.querySelector('#account-identity')!.textContent = this.user.email ?? 'Tu cuenta';
@@ -154,10 +184,7 @@ export class AccountPanel {
     const previous = selector.value;
     selector.replaceChildren(...backups.map((copy, i) => new Option(new Date(copy.at).toLocaleString(), String(i))));
     selector.value = previous && Number(previous) < backups.length ? previous : String(backups.length - 1);
-    const labels = { checking: 'Comprobando cuenta', saved: 'Cuenta al día', pending: 'Pendiente de enviar', offline: 'Guardado aquí', error: 'Guardado aquí · revisar', conflict: 'Elegir versión', incoming: 'Recuperar mi jardín' };
-    document.getElementById('save-state')!.textContent = labels[sync.status];
-    this.button.dataset.notice = String(sync.status !== 'saved');
-    this.button.title = `Mi cuenta · ${labels[sync.status]}`;
+
   }
   dispose(): void { clearInterval(this.retry); clearTimeout(this.debounce); this.abort.abort(); if (this.sync) this.sync.onChange = () => {}; this.dialog.remove(); this.button.remove(); }
 }

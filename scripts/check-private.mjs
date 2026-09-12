@@ -1,0 +1,9 @@
+import fs from 'node:fs/promises';import path from 'node:path';import {execFileSync} from 'node:child_process';
+const root=process.cwd(),files=[];async function walk(dir){for(const entry of await fs.readdir(dir,{withFileTypes:true})){const file=path.join(dir,entry.name);if(entry.isDirectory())await walk(file);else files.push(file);}}
+for(const dir of ['src','public','supabase','scripts','tests','docs','dist']){try{await walk(dir);}catch(e){if(e.code!=='ENOENT')throw e;}}
+for(const file of ['README.md','package.json','vite.config.ts','index.html'])files.push(path.join(root,file));
+const secrets=[];for(const file of ['private-gifts/recipient.json','private-gifts/gift.json']){try{const data=JSON.parse(await fs.readFile(file,'utf8'));for(const key of ['email','message','fullName'])if(data[key])secrets.push(data[key]);}catch(e){if(e.code!=='ENOENT')throw e;}}
+const findings=[];for(const file of files){if(!/\.(md|ts|js|mjs|json|sql|html|css|yaml|txt)$/i.test(file))continue;const text=await fs.readFile(file,'utf8');if(secrets.some(secret=>text.includes(secret))||/sb_secret_[a-zA-Z0-9_-]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text))findings.push(path.relative(root,file));}
+try{const tracked=execFileSync('git',['ls-files','--','.'],{encoding:'utf8'}).split('\n');for(const f of tracked)if(/(^|\/)(private-gifts|node_modules|artifacts|assets-source|dist)\/|(^|\/)\.env(?:\.|$)/.test(f)&&!f.endsWith('.env.example'))findings.push('Git: '+f);}catch{console.log('Git index check unavailable; file scan completed.');}
+if(findings.length){console.error('Do not publish. Private/generated files found:',findings);process.exit(1);}
+console.log(`PASS: ${files.length} source/public/build files checked; no configured recipient or private message, administrative key, or tracked private files detected.`);

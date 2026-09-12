@@ -79,9 +79,8 @@ export class GardenWorld {
     this.camera.panningSensibility = 0; this.camera.angularSensibilityX = 950; this.camera.angularSensibilityY = 1200;
     this.camera.attachControl(canvas, true);
     this.camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
-    this.sky = new FantasySky(this.scene);
+    this.sky = new FantasySky(this.scene, () => game.save.createdAt);
     this.landscape = this.forest ? createForest(this.scene) : createLandscape(this.scene);
-    if(this.forest) {this.sky.hour=21;this.sky.auto=false;}
     this.avatar = new Avatar(this.scene); this.avatar.root.position.set(0, groundHeight(0, this.forest ? 6 : 7.7), this.forest ? 6 : 7.7);
     this.avatar.root.rotation.y = Math.PI;
     const shadowMat = material(this.scene, 'traveler-contact-shadow', '#183e32'); shadowMat.alpha = 0.22;

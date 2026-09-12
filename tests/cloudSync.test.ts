@@ -92,3 +92,18 @@ test('simultaneous sync requests share one network operation', async () => {
   await engine.read(); await engine.write(planted()); await Promise.all([engine.sync(), engine.sync(), engine.sync()]);
   assert.equal(cloud.commits, 1);
 });
+
+test('local save dates survive reload and failed writes never advance confirmation dates', async () => {
+ const store=new Store(), cloud=new Cloud(), sync=new CloudSync(store,cloud);
+ await sync.read(); await sync.write(planted()); await sync.sync();
+ const localAt=sync.localSavedAt, cloudAt=sync.syncedAt;
+ assert.ok(localAt); assert.equal(cloudAt,cloud.data!.updatedAt);
+ store.fail=true;
+ await assert.rejects(sync.write({...planted(),avatar:'woman'}));
+ assert.equal(sync.localSavedAt,localAt);assert.equal(sync.syncedAt,cloudAt);
+ store.fail=false;cloud.offline=true;
+ await sync.write({...planted(),avatar:'woman'});await sync.sync();
+ assert.equal(sync.syncedAt,cloudAt);assert.equal(sync.pending,true);
+ const loaded=new CloudSync(store,cloud);await loaded.read();
+ assert.equal(loaded.localSavedAt,sync.localSavedAt);assert.equal(loaded.syncedAt,cloudAt);
+});

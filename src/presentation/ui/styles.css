@@ -258,3 +258,43 @@ dialog::backdrop { background:#20203918;backdrop-filter:blur(0px); }
 .gift-preview-bar button:focus-visible,.gift-preview-bar a:focus-visible,.preview-entry:focus-visible,.visit-home:focus-visible { outline:2px solid #b991ce;outline-offset:3px; }
 @media(max-width:600px) { .gift-preview-bar { gap:6px;max-width:calc(100% - 16px); } .gift-preview-bar>span { flex-basis:100%;text-align:center; } .gift-preview-bar button,.gift-preview-bar a { font-size:11px;padding:9px 10px; } }
 @media(prefers-reduced-motion:reduce) { .gift-preview-bar button,.gift-preview-bar a,.preview-entry,.visit-home { transition:none; } }
+
+/* A small expandable clock, available while playing on touch screens too. */
+.sky-status{position:relative;padding:0;display:block;z-index:5}
+.sky-status summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;cursor:pointer;font-variant-numeric:tabular-nums}
+.sky-status summary::-webkit-details-marker{display:none}
+.sky-status summary:focus-visible{outline:2px solid #f0d9a7;border-radius:16px}
+#sky-symbol{display:flex}
+.world-time-details{position:absolute;top:calc(100% + 8px);right:0;min-width:250px;display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid #fff7;border-radius:20px;background:#eee9e3ed;backdrop-filter:blur(12px);box-shadow:0 12px 30px #18253530;color:#3a504b;font-size:14px}
+.world-time-details small{font-size:10px;letter-spacing:1px;color:#65756f;margin-top:8px}
+.world-time-details strong{font:22px 'Playfair Display',serif}
+.theme-options{display:grid;gap:10px}
+.theme-options button{display:flex;align-items:center;gap:14px;padding:14px;min-height:64px;text-align:left;border:1px solid #fff9;border-radius:18px;background:linear-gradient(120deg,#e0ebe09c,#fff7);color:#354c49;font-size:15px}
+.theme-options button[data-sky-theme=forest]{background:linear-gradient(120deg,#abc6bd99,#f0ead880)}
+.theme-options button[data-sky-theme=celestial]{background:linear-gradient(120deg,#ccd0ebbb,#eedff080)}
+.theme-options button[aria-pressed=true]{border-color:#73618b;box-shadow:inset 0 0 0 1px #73618b}
+.theme-options svg{width:26px;height:26px;flex-shrink:0}
+.theme-options small{display:block;font-size:12px;line-height:1.6;opacity:.8}
+@media(max-width:700px){
+ .playing .sky-status,.sky-status{display:block;position:fixed;top:78px;left:auto;right:16px;font-size:13px;padding:0}
+ .sky-status summary{padding:0 12px}
+ .world-time-details{max-width:calc(100vw - 32px);min-width:240px}
+}
+.sky-status{pointer-events:auto}
+.sky-status summary{color:#35554f;background:#f8f2e5bd;border-radius:22px}.world-time-details{background:#f4f0e9f5}
+.save-overview{display:flex;flex-direction:column;gap:10px;margin:18px 0;padding:18px;border:1px solid #fff9;border-radius:18px;background:linear-gradient(130deg,#f9f5edc9,#e4e0ecc9);color:#415950}
+.save-overview strong{font-size:16px;line-height:1.4}
+.save-overview span{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+#save-state{max-width:180px;text-align:right;line-height:1.5}
+.account-button svg{width:22px;height:22px}
+
+.card-conversation{margin:20px 0 0;border-top:1px solid #a8947540;font:14px/1.5 'DM Sans',sans-serif;color:#42564e}
+.card-conversation summary{display:flex;align-items:center;gap:10px;min-height:48px;cursor:pointer;list-style:none}
+.card-conversation summary svg{width:23px;height:23px}
+.conversation-body{padding:8px 0}.comment-list article{padding:14px;margin:10px 0;background:#fffc;border:1px solid #e4ddd4;border-radius:16px}
+.comment-list time{display:block;font-size:11px;color:#626e67;margin:4px 0}.comment-list p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.6}
+.comment-form label{display:block;font-size:13px;margin:12px 0}.comment-form input,.comment-form textarea{display:block;width:100%;font:16px 'DM Sans',sans-serif;padding:12px;border:1px solid #b4b8ad;border-radius:12px;background:#fffaf2;color:#364e46;box-sizing:border-box}
+.card-conversation button{min-height:44px}.comment-status{font-size:13px}.comment-form[hidden],.comment-login[hidden],.comment-more[hidden]{display:none}
+.visiting #object-message:not([hidden]){display:block!important}
+#visit-key,#visit-url,#visit-code{box-sizing:border-box;width:100%;padding:12px;margin:8px 0 16px;font-size:16px;border:1px solid #b5b9aa;border-radius:12px;background:#fff9;color:#35554d}
+#visit-code{letter-spacing:2px}

@@ -265,3 +265,38 @@
 .gift-song progress::-webkit-progress-value { background:#9976aa;border-radius:4px; }
 .gift-song progress::-moz-progress-bar { background:#9976aa; }
 .gift-song-status:empty { display:none; }
+
+/* Sprint 1: a compact collection that only contains discovered memories. */
+.memory-journal[data-view=album]{background:linear-gradient(145deg,#faf5e9eb,#e7e2f0e6);border:1px solid #fff8;box-shadow:0 24px 80px #172c3940;backdrop-filter:blur(14px)}
+[data-view=album] .album-heading{align-items:center}
+[data-view=album] .album-intro{font-size:15px;color:#52645c;line-height:1.6}
+[data-view=album] .album-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+[data-view=album] .memory-card{flex-direction:row;align-items:stretch;border-radius:20px;background:#fffaf2b8;border:1px solid #fff9;box-shadow:0 3px 16px #343d4d09}
+[data-view=album] .memory-card-art{width:88px;min-width:88px;height:auto;min-height:132px;background:linear-gradient(150deg,var(--art-bg),var(--art-deep));color:var(--art-paper)}
+[data-view=album] .memory-card-art>svg{width:36px;height:36px}
+[data-view=album] .memory-card-copy{padding:18px;min-width:0;justify-content:center}
+[data-view=album] .memory-card strong{font-size:21px;line-height:1.25;min-height:0;margin:7px 0 9px;overflow-wrap:anywhere}
+[data-view=album] .card-state{font-size:10px;letter-spacing:1.1px;color:#526b60}
+[data-view=album] .card-location{font-size:14px;line-height:1.5;min-height:0;color:#59675f}
+[data-view=album] .album-footer{font-size:13px;color:#59675f}
+[data-view=album] .album-counter small{font-size:11px;color:#59675f}
+.album-empty{grid-column:1/-1;text-align:center;padding:32px 20px;background:#fff7;border:1px dashed #a69b7b80;border-radius:24px}
+.album-empty>span{display:grid;place-items:center;width:72px;height:72px;margin:auto;border-radius:50%;background:#dbe3d9;color:#587261}
+.album-empty svg{width:36px;height:36px}
+.album-empty h3{font:400 25px/1.3 'Playfair Display',serif;margin:20px 0 12px}
+.album-empty p,.discovery-empty{font-size:15px;line-height:1.6;color:#53665c}
+@media(max-width:600px){
+ [data-view=album] .journal-album{padding:48px 16px 22px}
+ [data-view=album] .album-heading{display:block;padding:0}
+ [data-view=album] .album-heading h2{max-width:none;font-size:30px}
+ [data-view=album] .album-intro{max-width:none}
+ [data-view=album] .album-counter{position:static;max-width:none;text-align:left;padding:12px 0 0;display:flex;align-items:center;gap:12px}
+ [data-view=album] .album-counter strong{font-size:24px}
+ [data-view=album] .album-counter small{margin:0}
+ [data-view=album] .album-grid{grid-template-columns:1fr}
+ [data-view=album] .memory-card-art{width:76px;min-width:76px}
+ [data-view=album] .memory-card-copy{padding:16px}
+ [data-view=album] .journal-kicker{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){[data-view=album] .memory-card{transition:none}[data-view=album] .memory-card:hover{transform:none}}
+.memory-journal[data-proposal=true][data-page="2"] .story-page-content>p.shared-awaiting{font:400 16px/1.6 "DM Sans",sans-serif;color:#675775}

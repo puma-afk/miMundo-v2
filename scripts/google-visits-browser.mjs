@@ -24,7 +24,7 @@ try {
     if (url.pathname === '/rest/v1/world_saves') return route.fulfill({contentType:'application/json',body:'[]'});
     if (url.pathname === '/rest/v1/world_gifts') return route.fulfill({contentType:'application/json',body:JSON.stringify(giftClaimed?[{payload:assignedGift}]:[])});
     if (url.pathname === '/rest/v1/rpc/claim_my_gift') {giftClaimed=true;return route.fulfill({contentType:'application/json',body:'true'});}
-    if (url.pathname === '/rest/v1/rpc/read_world_visit') return route.fulfill({contentType:'application/json',body:JSON.stringify({ schemaVersion:1,plants:{},memoriesRead:[],currentIsland:'garden' })});
+    if (url.pathname === '/rest/v1/rpc/read_world_visit_v2') return route.fulfill({contentType:'application/json',body:JSON.stringify({ token:'00000000-0000-4000-8000-000000000099',gift:null,save:{schemaVersion:1,plants:{},memoriesRead:[],currentIsland:'garden'} })});
     throw new Error('Unexpected request: ' + url.pathname);
   });
   await page.goto('http://localhost:5174/');

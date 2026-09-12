@@ -1,4 +1,4 @@
-> ESTADO VIGENTE 12/09/2026: versión 1.0 preparada. Google, música privada, visitas y asignación automática por correo verificado implementados. Ver ENTREGA-1.0.md. Entrega: ../ENTREGA-GITHUB-2026-09-12/github. Ejecutar el archivo privado ACTIVAR-REGALO.sql en Supabase, confirmar audios y publicar siguen siendo pasos manuales pendientes. Los avisos anteriores que aparecen debajo son históricos.
+> ESTADO VIGENTE 12/09/2026: versión 1.1, sprints 1–4 implementados. Carpeta principal mundo-v2; no crear copias de entrega. Ver README.md, GITHUB-Y-DESPLIEGUE.md y REVISION-SEGURIDAD-1.1.md. Nueva migración 009 para el límite de comentarios; aplicar manualmente. Lo que sigue es contexto histórico.
 
 > Estado más reciente: el regalo dejó de ser global. Personalización y carta se obtienen de world_gifts con RLS por UUID; configuración real solo en private-gifts (ignorado). Búsqueda de cuatro pistas implementada y probada. Ver REGALOS-PRIVADOS.md. Google, asignación del UUID, audio de las canciones y visitas siguen pendientes. No publicar la entrega antigua.
 

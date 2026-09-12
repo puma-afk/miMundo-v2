@@ -6,6 +6,7 @@ export type Plant = {
 };
 
 export type Save = {
+  createdAt?: number;
   schemaVersion: 1;
   avatar?: 'woman' | 'man';
   giftProgress?: { id: string; completed: number; response?: string };
@@ -19,7 +20,7 @@ export type Save = {
 };
 
 export const GROWTH_MS = 6 * 60 * 60 * 1000;
-export const freshSave = (): Save => ({ schemaVersion: 1, plants: {}, memoriesRead: [] });
+export const freshSave = (createdAt?: number): Save => ({ schemaVersion: 1, ...(createdAt === undefined ? {} : {createdAt}), plants: {}, memoriesRead: [] });
 
 export function stage(plant: Plant, now: number): 0 | 1 | 2 {
   const elapsed = Math.max(0, now - plant.plantedAt);
@@ -44,6 +45,7 @@ export function waterPlant(save: Save, plotId: string, now: number): Save {
 export function parseSave(input: unknown, plotIds: readonly string[]): Save {
   if (!input || typeof input !== 'object') throw new Error('El archivo no contiene un jardín válido.');
   const s = input as Partial<Save>;
+  if (s.createdAt !== undefined && (!Number.isFinite(s.createdAt) || s.createdAt < 0)) throw new Error('Fecha del jardín no válida.');
   if (s.schemaVersion !== 1) throw new Error('Esta versión de la partida no es compatible. Conserva tu copia.');
   if (s.avatar !== undefined && s.avatar !== 'woman' && s.avatar !== 'man') throw new Error('Avatar no válido.');
   if (s.giftProgress !== undefined && (!s.giftProgress || typeof s.giftProgress.id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(s.giftProgress.id) || !Number.isInteger(s.giftProgress.completed) || s.giftProgress.completed < 0 || s.giftProgress.completed > 4)) throw new Error('Progreso de regalo no válido.');

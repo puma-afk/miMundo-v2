@@ -23,5 +23,13 @@ test('private audio is readable only by the assigned owner and only for listed f
   await db.exec(`set request.jwt.claim.sub='00000000-0000-4000-8000-000000000002'`);
   assert.equal((await db.query('select name from storage.objects')).rows.length,0);
   await db.exec('set role anon');assert.equal((await db.query('select name from storage.objects')).rows.length,0);
+
+ await db.exec(`reset role;create table public.world_visits(owner_id uuid,token uuid,gift jsonb,active boolean default true);
+ insert into public.world_visits(owner_id,token,gift) values('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000099','{"id":"gift","songs":[{"file":"song.mp3"}]}');`);
+ const audioVisit=await readFile(new URL('../supabase/migrations/008_visit_audio.sql',import.meta.url),'utf8');await db.exec(audioVisit);await db.exec(audioVisit);
+ await db.exec(`set role anon;set request.headers='{"x-visit-token":"00000000-0000-4000-8000-000000000099"}';`);
+ assert.deepEqual((await db.query('select name from storage.objects')).rows,[{name:'gift/song.mp3'}]);
+ await db.exec(`set request.headers='{"x-visit-token":"wrong"}';`);assert.equal((await db.query('select name from storage.objects')).rows.length,0);
+ await db.exec(`reset role;delete from public.world_visits;set role anon;set request.headers='{"x-visit-token":"00000000-0000-4000-8000-000000000099"}';`);assert.equal((await db.query('select name from storage.objects')).rows.length,0);
  } finally {await db.close();}
 });

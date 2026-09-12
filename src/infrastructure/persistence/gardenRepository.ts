@@ -4,6 +4,7 @@ import type { Save } from '../../domain/gardening';
 import { plots } from '../../content/garden';
 
 export class GardenRepository {
+  savedAt: string | null = null;
   private db: IDBDatabase | null = null;
   private loadedSnapshot: string | undefined;
   constructor(private key = 'garden') {}
@@ -24,8 +25,14 @@ export class GardenRepository {
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
-    const save = data === undefined ? freshSave() : parseSave(data, [...plots,...forestPlots].map(p => p.id));
+    const save = data === undefined ? freshSave(Date.now()) : parseSave(data, [...plots,...forestPlots].map(p => p.id));
     this.loadedSnapshot = data === undefined ? undefined : JSON.stringify(data);
+    this.savedAt = await new Promise<string | null>((resolve, reject) => {
+      const req = this.db!.transaction('saves').objectStore('saves').get(`${this.key}:saved-at`);
+      req.onsuccess = () => resolve(typeof req.result === 'string' && Number.isFinite(Date.parse(req.result)) ? req.result : null);
+      req.onerror = () => reject(req.error);
+    });
+    if (data === undefined) await this.write(save);
     return save;
   }
   async write(save: Save): Promise<void> {
@@ -34,12 +41,14 @@ export class GardenRepository {
       const tx = this.db!.transaction('saves', 'readwrite');
       const store = tx.objectStore('saves');
       const check = store.get(this.key);
+      const savedAt = new Date().toISOString();
       let conflict = false;
       check.onsuccess = () => {
         if (JSON.stringify(check.result) !== this.loadedSnapshot) { conflict = true; tx.abort(); return; }
         store.put(save, this.key);
+        store.put(savedAt, `${this.key}:saved-at`);
       };
-      tx.oncomplete = () => { this.loadedSnapshot = JSON.stringify(save); resolve(); };
+      tx.oncomplete = () => { this.loadedSnapshot = JSON.stringify(save); this.savedAt = savedAt; resolve(); };
       tx.onerror = () => reject(new Error('No se pudo guardar. Inténtalo de nuevo o exporta una copia.'));
       tx.onabort = () => reject(new Error(conflict ? 'El jardín cambió en otra pestaña. Recarga para recuperar sus cambios.' : 'El guardado fue interrumpido.'));
     });

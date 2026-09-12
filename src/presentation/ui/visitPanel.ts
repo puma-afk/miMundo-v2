@@ -1,26 +1,17 @@
 import { supabase } from '../../infrastructure/cloud/supabase';
-
 export function mountVisitSharing(pause: (value: boolean) => void): void {
-  const trigger = document.createElement('button'); trigger.className = 'icon-button'; trigger.textContent = '↗'; trigger.setAttribute('aria-label', 'Compartir mi jardín');
-  document.querySelector('.toolbar')!.append(trigger);
-  const dialog = document.createElement('dialog'); dialog.className = 'settings-dialog'; dialog.setAttribute('aria-labelledby', 'visit-title');
-  dialog.innerHTML = '<button class="dialog-close icon-button" aria-label="Cerrar visitas">×</button><h2 id="visit-title">Abre las puertas de tu isla</h2><p>Comparte una copia del jardín que ya guardaste en tu cuenta. Cualquiera con el enlace podrá explorar sin registrarse.</p><p>Tu carta, respuesta y mensajes personales permanecen privados. Las visitas no pueden cambiar tu mundo.</p><button class="primary" id="visit-publish">Crear / actualizar enlace</button><label for="visit-url">Tu enlace de visita</label><input id="visit-url" readonly placeholder="Aquí aparecerá el enlace"><button class="secondary" id="visit-revoke">Desactivar enlace</button><p id="visit-status" role="status"></p>';
-  document.getElementById('app')!.append(dialog);
-  trigger.onclick = () => { document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d => d.close()); pause(true); dialog.showModal(); };
-  dialog.querySelector<HTMLButtonElement>('.dialog-close')!.onclick = () => dialog.close(); dialog.onclose = () => pause(false);
-  const status = dialog.querySelector<HTMLElement>('#visit-status')!;
-  const field = dialog.querySelector<HTMLInputElement>('#visit-url')!;
-  const run = async (publish: boolean) => {
-    const buttons = dialog.querySelectorAll<HTMLButtonElement>('#visit-publish,#visit-revoke'); buttons.forEach(b => b.disabled = true);
-    try {
-      const { data, error } = await supabase.rpc(publish ? 'publish_my_visit' : 'revoke_my_visit');
-      if (error) throw new Error('No se pudo completar. Guarda primero en tu cuenta y comprueba que la migración de visitas esté instalada.');
-      field.value = publish ? `${location.origin}/?visit=${data}` : '';
-      status.textContent = publish ? 'Enlace listo. Copia la dirección y compártela. Para mostrar nuevos cambios, guarda en tu cuenta y actualiza este enlace.' : 'Enlace desactivado. Ya no permitirá nuevas visitas.';
-      if (publish) { field.focus(); field.select(); }
-    } catch (e) { status.textContent = e instanceof Error ? e.message : 'No se pudo completar.'; }
-    finally { buttons.forEach(b => b.disabled = false); }
-  };
-  dialog.querySelector<HTMLButtonElement>('#visit-publish')!.onclick = () => void run(true);
-  dialog.querySelector<HTMLButtonElement>('#visit-revoke')!.onclick = () => void run(false);
+ const trigger=document.createElement('button');trigger.className='icon-button';trigger.setAttribute('aria-label','Visitar y compartir mundos');
+ trigger.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15 9-2 4-4 2 2-4Z"/></svg>';
+ document.querySelector('.toolbar')!.append(trigger);
+ const dialog=document.createElement('dialog');dialog.className='settings-dialog';dialog.setAttribute('aria-labelledby','visit-title');
+ dialog.innerHTML=`<button class="dialog-close icon-button" aria-label="Cerrar visitas">×</button><h2 id="visit-title">Puertas a otros mundos</h2><form id="visit-enter"><label for="visit-key">Enlace o código de invitación</label><input id="visit-key" required maxlength="500" autocomplete="off" placeholder="Pega tu invitación"><button class="secondary">Visitar mundo</button></form><div class="settings-divider"></div><h3>Invita a tu jardín</h3><p>Al crear o actualizar tu invitación, compartirás tus plantas, dedicatorias, cartas y respuesta del evento. Cualquiera con el enlace podrá leerlas y pasear. Solo tú puedes cambiar tu partida.</p><p class="muted">Los comentarios se escriben con una cuenta propia. Guarda en la nube antes de actualizar la invitación.</p><button class="primary" id="visit-publish">Crear / actualizar invitación</button><label for="visit-url">Enlace</label><input id="visit-url" readonly><label for="visit-code">Código</label><input id="visit-code" readonly><div class="save-actions"><button class="secondary" id="visit-copy">Copiar enlace</button><button class="secondary" id="visit-revoke">Desactivar invitación</button></div><p id="visit-status" role="status"></p>`;
+ document.getElementById('app')!.append(dialog);
+ const status=dialog.querySelector<HTMLElement>('#visit-status')!,field=dialog.querySelector<HTMLInputElement>('#visit-url')!,code=dialog.querySelector<HTMLInputElement>('#visit-code')!;
+ const show=(data:{token:string;code:string}|null)=>{field.value=data?location.origin+'/?visit='+data.token:'';code.value=data?.code??'';};
+ trigger.onclick=async()=>{document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());pause(true);dialog.showModal();const session=await supabase.auth.getSession();if(session.data.session){const r=await supabase.rpc('get_my_visit');if(!r.error)show(r.data);}else status.textContent='Puedes visitar sin cuenta. Entra en Mi cuenta para compartir tu jardín.';};
+ dialog.querySelector<HTMLButtonElement>('.dialog-close')!.onclick=()=>dialog.close();dialog.onclose=()=>pause(false);
+ dialog.querySelector<HTMLFormElement>('#visit-enter')!.onsubmit=event=>{event.preventDefault();let key=dialog.querySelector<HTMLInputElement>('#visit-key')!.value.trim();try{if(/^https?:/i.test(key))key=new URL(key).searchParams.get('visit')??'';}catch{key='';}key=key.replace(/\s/g,'');if(!/^(?:[a-f0-9]{12}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i.test(key)){status.textContent='Revisa el enlace o el código de 12 caracteres.';return;}location.assign(location.origin+'/?visit='+encodeURIComponent(key));};
+ const run=async(publish:boolean)=>{const buttons=dialog.querySelectorAll<HTMLButtonElement>('#visit-publish,#visit-revoke');buttons.forEach(b=>b.disabled=true);try{const {error}=await supabase.rpc(publish?'publish_my_visit':'revoke_my_visit');if(error)throw error;if(publish){const r=await supabase.rpc('get_my_visit');if(r.error)throw r.error;show(r.data);}else show(null);status.textContent=publish?'Invitación lista. Los nuevos cambios se mostrarán cuando la actualices.':'Invitación desactivada. Al crear otra recibirás un nuevo enlace y código.';}catch{status.textContent='Entra con tu cuenta, guarda tu mundo en la nube y comprueba la conexión. Si continúa, la función puede estar pendiente de activar.';}finally{buttons.forEach(b=>b.disabled=false);}};
+ dialog.querySelector<HTMLButtonElement>('#visit-publish')!.onclick=()=>void run(true);dialog.querySelector<HTMLButtonElement>('#visit-revoke')!.onclick=()=>void run(false);
+ dialog.querySelector<HTMLButtonElement>('#visit-copy')!.onclick=async()=>{if(!field.value)return;try{await navigator.clipboard.writeText(field.value);status.textContent='Enlace copiado.';}catch{field.focus();field.select();status.textContent='Selecciona y copia el enlace.';}};
 }

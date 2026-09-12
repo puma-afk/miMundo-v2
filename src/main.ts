@@ -1,3 +1,4 @@
+import { parseGift } from './domain/privateGift';
 import './presentation/ui/styles.css';
 import '@fontsource/dm-sans/latin-400.css';
 import '@fontsource/dm-sans/latin-600.css';
@@ -25,18 +26,20 @@ const navIcon = (kind: 'home' | 'preview' | 'restart' | 'exit') => `<svg viewBox
 async function start(): Promise<void> {
   const visit = new URLSearchParams(location.search).get('visit');
   if (visit) {
-    if (!/^[0-9a-f-]{36}$/i.test(visit)) throw new Error('Enlace de visita no válido.');
-    const { data, error } = await supabase.rpc('read_world_visit', { p_token: visit });
+    if (!/^(?:[0-9a-f-]{36}|[0-9a-f]{12})$/i.test(visit)) throw new Error('Enlace de visita no válido.');
+    const { data, error } = await supabase.rpc('read_world_visit_v2', { p_key: visit });
     if (error || !data) throw new Error('Este enlace de visita no está disponible.');
-    const snapshot = validateGarden(data);
+    const snapshot = validateGarden(data.save);
+    const sharedGift = data.gift ? parseGift(data.gift) : null;
     const game = new GardenGame({ read: async () => snapshot, write: async () => { throw new Error('Estás de visita. Solo la propietaria puede modificar este jardín.'); } });
     await game.load();
     const world = new GardenWorld(document.getElementById('world') as HTMLCanvasElement, game);
-    const ui = new GameInterface(world, game, null, true);
+    const ui = new GameInterface(world, game, sharedGift, true, {token:data.token});
     document.getElementById('app')!.classList.add('visiting');
     document.getElementById('intro-title')!.textContent = 'Te han abierto las puertas del jardín';
     const intro = document.querySelector('.intro p'); if (intro) intro.textContent = 'Pasea entre las nubes. Esta visita no cambia el mundo de su propietaria.';
     const back = document.createElement('a'); back.className = 'visit-home'; back.href = location.origin + '/'; back.innerHTML = navIcon('exit') + '<span>Salir de la visita</span>'; document.querySelector('.toolbar')!.append(back);
+    if (import.meta.env.DEV) Object.assign(window, { __MI_MUNDO_DEV__: { world, game, sync: null } });
     await world.scene.whenReadyAsync(); ui.ready(); return;
   }
   const { data } = await supabase.auth.getSession();
@@ -51,9 +54,13 @@ async function start(): Promise<void> {
   const subscription = supabase.auth.onAuthStateChange((_event, session) => {
     if (!preview && (session?.user.id ?? null) !== (user?.id ?? null)) { sessionChanged = true; location.reload(); }
   });
-  const game = new GardenGame({ read: () => savePort.read(), write: save => {
+  let account: AccountPanel | null = null;
+  const savedAt = () => sync ? sync.localSavedAt : (repository as GardenRepository).savedAt;
+  const game = new GardenGame({ read: () => savePort.read(), write: async save => {
     if (sessionChanged) return Promise.reject(new Error('Tu sesión cambió. Recarga antes de seguir.'));
-    return savePort.write(save);
+    account?.updateLocal('saving', savedAt());
+    try { await savePort.write(save); account?.updateLocal('ready', savedAt()); }
+    catch (error) { account?.updateLocal('error', savedAt(), error instanceof Error ? error.message : 'Inténtalo otra vez.'); throw error; }
   } });
   let storageError: string | null = null;
   try { await repository.open(); await game.load();
@@ -67,8 +74,9 @@ async function start(): Promise<void> {
   const world = new GardenWorld(document.getElementById('world') as HTMLCanvasElement, game);
   const gift = await loadPrivateGift(user?.id ?? null).catch(() => null);
   if (gift) world.configureGift(gift.id);
-  const ui = new GameInterface(world, game, gift);
-  const account = preview ? null : new AccountPanel(user, sync, paused => { world.paused = paused; world.previewSky = false; world.input.clear(); });
+  const ui = new GameInterface(world, game, gift, false, user ? {} : undefined);
+  account = preview ? null : new AccountPanel(user, sync, paused => { world.paused = paused; world.previewSky = false; world.input.clear(); });
+  account?.updateLocal(storageError ? 'error' : 'ready', savedAt(), storageError ?? '');
   if (import.meta.env.DEV && preview) {
     const cloud = document.createElement('button'); cloud.className = 'icon-button'; cloud.id = 'preview-account'; cloud.textContent = '☁'; cloud.title = 'Mi cuenta y guardado en nube'; cloud.setAttribute('aria-label', 'Volver a mi cuenta y guardado en nube');
     cloud.onclick = () => location.assign(location.origin + '/?account=1'); document.querySelector('.toolbar')!.prepend(cloud);
@@ -82,7 +90,7 @@ async function start(): Promise<void> {
   if (import.meta.env.DEV && !preview) {
     const test = document.createElement('a'); test.className = 'preview-entry'; test.href = location.origin + '/?gift-preview=1'; test.innerHTML = navIcon('preview') + '<span>Probar evento</span>'; document.querySelector('.toolbar')!.append(test);
   }
-  if (gift && user) mountVisitSharing(paused => { world.paused = paused; world.input.clear(); });
+  if (!preview) mountVisitSharing(paused => { world.paused = paused; world.input.clear(); });
   // Development-only inspection for browser tests; excluded from production builds.
   if (import.meta.env.DEV) Object.assign(window, { __MI_MUNDO_DEV__: { world, game, sync } });
   if (storageError) ui.storageUnavailable(storageError);

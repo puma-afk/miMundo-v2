@@ -1,4 +1,6 @@
 import { Color3, Effect, Mesh, MeshBuilder, Scene, ShaderMaterial, Vector3, DirectionalLight, HemisphericLight } from '../engine';
+import { worldTime, DAY_MS } from '../../domain/worldTime';
+export type SkyTheme = 'garden' | 'forest' | 'celestial';
 
 Effect.ShadersStore.fantasySkyVertexShader = `
 precision highp float;
@@ -42,12 +44,14 @@ void main() {
 export class FantasySky {
   hour = 17;
   auto = true;
-  readonly secondsPerHour = 21600;
+  readonly secondsPerHour = DAY_MS / 24000;
+  theme: SkyTheme = 'garden';
   private clock = 0;
   private mat: ShaderMaterial;
   readonly sun: DirectionalLight;
   readonly ambient: HemisphericLight;
-  constructor(private scene: Scene) {
+  constructor(private scene: Scene, private createdAt: () => number | undefined = () => undefined) {
+    try { const saved = localStorage.getItem('mi-mundo-sky-theme'); if (saved === 'garden' || saved === 'forest' || saved === 'celestial') this.theme = saved; } catch { /* Storage may be unavailable. */ }
     const dome = MeshBuilder.CreateSphere('atmosphere', { diameter: 450, segments: 24, sideOrientation: Mesh.BACKSIDE }, scene);
     dome.infiniteDistance = true;
     dome.isPickable = false;
@@ -65,11 +69,12 @@ export class FantasySky {
   }
   update(dt: number, reducedMotion: boolean): void {
     if (!reducedMotion) this.clock += dt;
-    if (this.auto) this.hour = (this.hour + dt / this.secondsPerHour) % 24;
+    if (this.auto) this.hour = worldTime(Date.now(), this.createdAt()).hour;
     const night = Math.min(1, Math.max(0, (Math.abs(this.hour - 12) - 5.8) / 2.2));
     const sunset = Math.max(0, 1 - Math.abs(this.hour - 17) / 3) * (1 - night);
-    const top = Color3.Lerp(Color3.FromHexString('#75b5ce'), Color3.FromHexString('#18233e'), night);
-    const horizon = Color3.Lerp(Color3.Lerp(Color3.FromHexString('#c9e6df'), Color3.FromHexString('#f6c3a0'), sunset), Color3.FromHexString('#526381'), night);
+    const palette = this.theme === 'forest' ? ['#78a29b','#142d38','#b8d2bb','#e0b69f','#395769'] : this.theme === 'celestial' ? ['#a3b2e0','#282346','#e0d7f0','#f2bbcf','#73668e'] : ['#75b5ce','#18233e','#c9e6df','#f6c3a0','#526381'];
+    const top = Color3.Lerp(Color3.FromHexString(palette[0]), Color3.FromHexString(palette[1]), night);
+    const horizon = Color3.Lerp(Color3.Lerp(Color3.FromHexString(palette[2]), Color3.FromHexString(palette[3]), sunset), Color3.FromHexString(palette[4]), night);
     const theta = ((this.hour - 6) / 12) * Math.PI;
     const dir = new Vector3(Math.cos(theta), Math.max(0.04, Math.sin(theta) * 0.8), -0.8).normalize();
     this.mat.setColor3('topColor', top);
@@ -83,5 +88,10 @@ export class FantasySky {
     this.ambient.intensity = 0.84 - night * 0.32;
     this.scene.fogColor = horizon;
     this.scene.clearColor.set(horizon.r, horizon.g, horizon.b, 1);
+  }
+  setTheme(theme: SkyTheme): void {
+    this.theme = theme;
+    try { localStorage.setItem('mi-mundo-sky-theme', theme); } catch { /* Keep the session preference. */ }
+    this.update(0, true);
   }
 }

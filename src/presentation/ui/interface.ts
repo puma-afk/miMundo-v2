@@ -1,3 +1,4 @@
+import { worldTime } from '../../domain/worldTime';
 import { forestAchievements, canVisitForest } from '../../domain/achievements';
 import { storySymbol } from '../memories/storyArt';
 import { AvatarPreview } from '../player/avatarPreview';
@@ -12,6 +13,7 @@ import { giftStops } from '../../domain/privateGift';
 
 const icons = {
   leaf: '<path d="M12 21V11m0 5C3 16 3 6 4 4c8 0 9 6 8 12Zm0-4C11 4 17 2 21 3c1 7-3 10-9 9Z"/>',
+  moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5Z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
   book: '<path d="M12 5v15M3 4c4-1 7 0 9 2 2-2 5-3 9-2v15c-4-1-7 0-9 2-2-2-5-3-9-2Z"/>',
   sound: '<path d="m11 4-6 5H2v6h3l6 5Zm4 4c2 2 2 6 0 8m3-11c4 4 4 10 0 14"/>',
@@ -40,13 +42,13 @@ export class GameInterface {
   private avatarPreview: AvatarPreview | null = null;
   private readTimer = 0;
   private messageTarget: string | null = null;
-  constructor(private world: GardenWorld, private game: GardenGame, private gift: PrivateGift | null = null, private visiting = false) {
+  constructor(private world: GardenWorld, private game: GardenGame, private gift: PrivateGift | null = null, private visiting = false, comments?: {token?: string}) {
     this.root = document.getElementById('app')!;
     this.root.innerHTML = `
       <div class="vignette"></div><button id="target-bubble" class="target-bubble" hidden></button><div id="care-feedback" class="care-feedback" aria-hidden="true" hidden>♡</div>
       <header class="topbar">
         <a class="brand" href="#" aria-label="Mi Mundo, volver a la entrada"><span class="brand-symbol">${icon('leaf')}</span><span>mi mundo<span class="brand-sub">UN LUGAR PARA VOLVER</span></span></a>
-        <div class="sky-status">${icon('sun')}<span id="sky-name">La hora dorada</span><span class="status-divider"></span><span id="clock">17:00</span></div>
+        <details class="sky-status"><summary aria-label="Hora del mundo y fecha real"><span id="sky-symbol">${icon('sun')}</span><span id="clock">08:00</span></summary><div class="world-time-details"><small>EN TU MUNDO</small><strong id="sky-name"></strong><span id="world-day"></span><small>EN LA VIDA REAL</small><time id="real-date"></time><span id="garden-age"></span></div></details>
         <nav class="toolbar" aria-label="Herramientas del jardín">
           <button class="icon-button" id="album" title="Recuerdos" aria-label="Abrir recuerdos">${icon('book')}</button>
           <button class="icon-button" id="sound" title="Música del jardín" aria-label="Abrir música" data-playing="false">${icon('sound')}<span class="sound-dot"></span></button>
@@ -126,9 +128,12 @@ export class GameInterface {
         <div class="eyebrow">HAZLO A TU MANERA</div><h2>Tu momento de calma</h2>
 
         <label class="setting-row" for="quality">Calidad del paisaje<select id="quality"><option value="low">Ligera · celular</option><option value="balanced">Equilibrada</option><option value="high">Alta</option></select></label>
-        <label class="setting-row" for="hour">Hora del cielo <output id="hour-value">17:00</output></label><input id="hour" type="range" min="0" max="23.99" step="0.1" value="17" aria-label="Hora del cielo" />
-        <div class="sky-presets" aria-label="Momentos del cielo"><button data-sky-hour="6">☀ Amanecer</button><button data-sky-hour="12">☼ Día</button><button data-sky-hour="17">◒ Atardecer</button><button data-sky-hour="22">☾ Noche</button></div><p class="muted">Ritmo fijo: 1 hora real equivale a 10 minutos del cielo. Las plantas crecen con tiempo real, incluso cuando no estás.</p>
-        <label class="setting-row">Dejar pasar el día<input id="auto-time" type="checkbox" checked /></label>
+        <h3>Ambiente de tu mundo</h3>
+        <div class="theme-options" role="group" aria-label="Ambiente de tu mundo">
+          <button data-sky-theme="garden">${icon('leaf')}<span>Jardín de ensueño<small>Suave y cálido</small></span></button>
+          <button data-sky-theme="forest">${icon('moon')}<span>Bosque encantado<small>Profundo y sereno</small></span></button>
+          <button data-sky-theme="celestial">${icon('spark')}<span>Brisa celeste<small>Azules y lavandas</small></span></button>
+        </div><p class="muted">Un día del cielo dura 30 minutos. Tus plantas crecen a su propio ritmo, con tiempo real.</p>
         <label class="setting-row">Movimiento suave reducido<input id="reduced" type="checkbox" /></label>
         <div class="settings-divider"></div><h3>Cuida tus recuerdos</h3><p class="muted">Tu jardín se guarda en este navegador. Exporta una copia para conservarlo o llevarlo a otro dispositivo.</p>
         <div class="save-actions"><button id="export" class="secondary">Exportar jardín</button><button id="import" class="secondary">Importar copia</button></div>
@@ -153,6 +158,7 @@ export class GameInterface {
       gift,
       pauseWorld: paused => { world.paused = paused; world.input.clear(); },
       reducedMotion: () => world.reducedMotion,
+      visiting, comments,
       canSave: () => this.available && !this.visiting,
       onSaved: () => this.refresh(),
       pauseBackgroundMusic: () => { if (this.music.playing) void this.music.toggle(); },
@@ -192,21 +198,23 @@ export class GameInterface {
     $('action').onclick = () => void this.act(); world.input.onInteract = () => void this.act();
     $('object-message').onclick = () => {
       if (!this.target || world.paused) return;
+      if(this.visiting && !game.save.messages?.[this.target.id]) return;
       this.messageTarget = this.target.id;
       $('message-object').textContent = findStory(this.target.id)?.object || 'Tu flor de luna';
       const field = $<HTMLTextAreaElement>('message-text');
       field.value = game.save.messages?.[this.target.id] || '';
       $('message-length').textContent = String(field.value.length); $('message-status').textContent = '';
       $('message-dedication').textContent = field.value;
-      $('message-view').hidden = !field.value; $('message-editor').hidden = !!field.value;
+      $('message-view').hidden = !field.value; $('message-editor').hidden = this.visiting || !!field.value;
+      $('edit-message').hidden = this.visiting;
       $('message-dialog').dataset.theme = findStory(this.target.id)?.theme || 'flower';
       $<HTMLButtonElement>('save-message').disabled = !this.available;
       this.openDialog($('message-dialog'));
     };
-    $('edit-message').onclick = () => { $('message-view').hidden = true; $('message-editor').hidden = false; $<HTMLTextAreaElement>('message-text').focus(); };
+    $('edit-message').onclick = () => { if(this.visiting)return; $('message-view').hidden = true; $('message-editor').hidden = false; $<HTMLTextAreaElement>('message-text').focus(); };
     $<HTMLTextAreaElement>('message-text').oninput = e => { $('message-length').textContent = String((e.target as HTMLTextAreaElement).value.length); $('message-status').textContent = 'Cambios sin guardar'; };
     $('save-message').onclick = async () => {
-      if (!this.messageTarget) return;
+      if (this.visiting || !this.messageTarget) return;
       const button = $<HTMLButtonElement>('save-message'); button.disabled = true;
       const field = $<HTMLTextAreaElement>('message-text'); field.disabled = true;
       try { await game.setMessage(this.messageTarget, field.value); $('message-status').textContent = field.value.trim() ? '♡ Mensaje guardado en este lugar.' : 'Mensaje eliminado.'; this.showCare('♡'); $('message-dedication').textContent = field.value.trim(); $('message-view').hidden = !field.value.trim(); $('message-editor').hidden = !!field.value.trim(); this.refresh(); }
@@ -243,17 +251,21 @@ export class GameInterface {
     this.music.onChange = () => this.refreshMusic(); this.music.onError = message => this.toast(message);
     this.refreshMusic();
     const quality = $<HTMLSelectElement>('quality'); quality.value = matchMedia('(max-width: 800px)').matches ? 'low' : 'balanced'; quality.onchange = () => world.setQuality(quality.value);
-    const hour = $<HTMLInputElement>('hour'); hour.value = String(world.sky.hour); $<HTMLInputElement>('auto-time').checked = world.sky.auto; this.time(world.sky.hour);
-    this.root.querySelectorAll<HTMLButtonElement>('[data-sky-hour]').forEach(button => button.onclick = () => { hour.value = button.dataset.skyHour!; hour.dispatchEvent(new Event('input')); });
-    hour.oninput = () => { world.sky.hour = Number(hour.value); world.sky.auto = false; $<HTMLInputElement>('auto-time').checked = false; world.sky.update(0,world.reducedMotion); this.time(world.sky.hour); };
-    $<HTMLInputElement>('auto-time').onchange = e => { world.sky.auto = (e.target as HTMLInputElement).checked; };
+    const themeButtons = this.root.querySelectorAll<HTMLButtonElement>('[data-sky-theme]');
+    const refreshTheme = () => themeButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.skyTheme === world.sky.theme)));
+    themeButtons.forEach(button => button.onclick = () => {
+      const theme = button.dataset.skyTheme;
+      if (theme === 'garden' || theme === 'forest' || theme === 'celestial') world.sky.setTheme(theme);
+      refreshTheme();
+    });
+    refreshTheme(); this.time(world.sky.hour);
     const reduced = $<HTMLInputElement>('reduced'); reduced.checked = world.reducedMotion; reduced.onchange = () => { world.reducedMotion = reduced.checked; };
     this.root.querySelectorAll<HTMLDialogElement>('dialog:not(#memory-dialog)').forEach(d => {
       d.querySelectorAll<HTMLElement>('[data-close]').forEach(b => b.onclick = () => d.close());
       d.addEventListener('close', () => { if(d.id==='settings-dialog') world.previewSky=false; world.paused = false; world.input.clear(); });
       d.addEventListener('click', e => { if (e.target === d) { const r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); } });
     });
-    $('export').onclick = () => {
+    $('export').onclick = () => { if(this.visiting)return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(game.save, null, 2)], { type: 'application/json' }));
       const a = document.createElement('a'); a.href = url; a.download = `mi-jardin-${new Date().toISOString().slice(0, 10)}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
       this.toast('Tu copia del jardín está preparada.');
@@ -309,7 +321,8 @@ export class GameInterface {
     const giftCompleted = this.game.save.giftProgress?.id === this.gift?.id ? this.game.save.giftProgress?.completed ?? 0 : 0;
     const messageButton = document.getElementById('object-message')!;
     messageButton.hidden = !this.world.entered || !this.target || !(this.target.kind === 'memory' || this.target.kind === 'plot' && !!this.game.save.plants[this.target.id]);
-    messageButton.textContent = this.target && this.game.save.messages?.[this.target.id] ? 'Leer / editar mensaje ♡' : 'Escribir mensaje ♡';
+    if(this.visiting) messageButton.hidden = messageButton.hidden || !this.target || !this.game.save.messages?.[this.target.id];
+    messageButton.textContent = this.visiting ? 'Leer dedicatoria' : this.target && this.game.save.messages?.[this.target.id] ? 'Leer / editar mensaje ♡' : 'Escribir mensaje ♡';
     const plots = this.world.activePlots;
     const count = plots.filter(p=>this.game.save.plants[p.id]).length;
     const cards = document.getElementById('garden-cards')!; cards.replaceChildren();
@@ -327,6 +340,7 @@ export class GameInterface {
     if (collection.dataset.signature !== signature) {
       collection.dataset.signature = signature; collection.replaceChildren();
       stories.forEach(story => {
+        if (!this.game.save.memoriesRead.includes(story.id)) return;
         if (this.gift && giftStops.indexOf(story.id as typeof giftStops[number]) > giftCompleted) return;
         const card = document.createElement('details'); card.className = 'memory-discovery';
         const summary = document.createElement('summary');
@@ -339,6 +353,10 @@ export class GameInterface {
         if (this.game.save.messages?.[story.id]) { const note = document.createElement('span'); note.className = 'discovery-note'; note.textContent = '♡ Tiene tu dedicatoria'; hint.append(document.createElement('br'),note); }
         card.append(summary,hint); collection.append(card);
       });
+      if (!collection.childElementCount) {
+        const empty = document.createElement('p'); empty.className = 'discovery-empty';
+        empty.textContent = 'Tu historia empieza explorando.'; collection.append(empty);
+      }
     }
     document.getElementById('compact-progress')!.textContent = `${count} / ${plots.length} ${this.world.forest ? 'helechos' : 'flores'}`;
     document.getElementById('plant-count')!.textContent = `${count} de ${plots.length} ${this.world.forest ? 'helechos' : 'flores'}`;
@@ -391,10 +409,18 @@ export class GameInterface {
   private time(hour: number): void {
     const text = `${Math.floor(hour).toString().padStart(2, '0')}:${Math.floor(hour % 1 * 60).toString().padStart(2, '0')}`;
     document.getElementById('clock')!.textContent = text;
-    document.getElementById('hour-value')!.textContent = text;
-    if(document.activeElement?.id !== 'hour') (document.getElementById('hour') as HTMLInputElement).value=String(hour);
-    this.root.querySelectorAll<HTMLButtonElement>('[data-sky-hour]').forEach(b=>b.setAttribute('aria-pressed',String(Math.abs(Number(b.dataset.skyHour)-hour)<.5)));
-    document.getElementById('sky-name')!.textContent = hour < 6 || hour > 19 ? 'Bajo las estrellas' : hour > 15 ? 'La hora dorada' : 'Un día para soñar';
+    const night = hour < 6 || hour >= 20;
+    document.getElementById('sky-symbol')!.innerHTML = icon(night ? 'moon' : 'sun');
+    document.getElementById('sky-name')!.textContent = night ? 'Bajo las estrellas' : hour < 9 ? 'Amanecer' : hour >= 16 ? 'Atardecer' : 'Un día para soñar';
+    const now = new Date();
+    document.getElementById('world-day')!.textContent = 'Día ' + worldTime(now.getTime(), this.game.save.createdAt).day + ' del cielo';
+    const real = document.getElementById('real-date') as HTMLTimeElement;
+    real.dateTime = now.toISOString();
+    real.textContent = new Intl.DateTimeFormat('es', {dateStyle:'long', timeStyle:'short'}).format(now);
+    const createdAt = this.game.save.createdAt;
+    const age = createdAt === undefined ? 0 : Math.floor(Math.max(0,now.getTime()-createdAt)/86400000)+1;
+    document.getElementById('garden-age')!.textContent = age ? 'Tu jardín lleva ' + age + (age === 1 ? ' día contigo' : ' días contigo') : '';
+
   }
   private refreshMusic(): void {
     const { track, playing, loading, volume } = this.music;
