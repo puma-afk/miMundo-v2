@@ -1,0 +1,163 @@
+import type { User } from '@supabase/supabase-js';
+import type { CloudSync } from '../../application/cloudSync';
+import { supabase } from '../../infrastructure/cloud/supabase';
+import { GardenRepository } from '../../infrastructure/persistence/gardenRepository';
+
+export function downloadCopy(value: unknown, name: string): void {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = `${name}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export class AccountPanel {
+  private dialog: HTMLDialogElement;
+  private button: HTMLButtonElement;
+  private retry = 0;
+  private debounce = 0;
+  private email = '';
+  private resendAt = 0;
+  private abort = new AbortController();
+  private busy = false;
+  private chosen: 'cloud' | 'local' | null = null;
+  constructor(private user: User | null, private sync: CloudSync | null, pause: (paused: boolean) => void) {
+    this.button = document.createElement('button');
+    this.button.id = 'account'; this.button.className = 'icon-button account-button';
+    this.button.textContent = '☁'; this.button.title = 'Mi cuenta'; this.button.setAttribute('aria-label', 'Abrir mi cuenta');
+    document.querySelector('.toolbar')!.prepend(this.button);
+    this.dialog = document.createElement('dialog'); this.dialog.id = 'account-dialog'; this.dialog.className = 'settings-dialog account-dialog';
+    this.dialog.setAttribute('aria-labelledby', 'account-title');
+    this.dialog.innerHTML = `
+      <button class="dialog-close icon-button" id="account-close" aria-label="Cerrar mi cuenta">×</button>
+      <div class="account-sigil" aria-hidden="true">☁ ✧</div>
+      <div class="eyebrow">UN HOGAR PARA TUS RECUERDOS</div><h2 id="account-title">Tu mundo, contigo</h2>
+      <section id="account-login">
+        <button id="account-google" class="google-login" type="button"><span aria-hidden="true">G</span> Continuar con Google <span aria-hidden="true">↗</span></button>
+        <p class="muted">Entra con tu correo para llevar tu jardín a otro dispositivo. También puedes seguir jugando sin cuenta.</p>
+        <form id="account-email-form"><label for="account-email">Tu correo</label><input id="account-email" type="email" autocomplete="email" required maxlength="254" placeholder="tu@correo.com"><button class="primary" type="submit">Recibir código</button></form>
+        <form id="account-code-form" hidden><p id="account-code-hint" class="muted">Revisa tu correo y escribe el código de acceso.</p><label for="account-code">Código de acceso</label><input id="account-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" minlength="6" maxlength="10" required><button class="primary" type="submit">Entrar a mi mundo</button><button class="text-button" id="account-change-email" type="button">Cambiar correo o pedir otro código</button></form>
+        <p class="account-note">El jardín sin cuenta queda separado. Al entrar podrás recuperarlo mediante una copia o elegir llevarlo a una cuenta nueva.</p>
+      </section>
+      <section id="account-connected" hidden>
+        <p id="account-identity" class="account-identity"></p><div class="account-sync-card"><span id="account-sync-symbol" aria-hidden="true">✧</span><p id="account-sync-status" role="status"></p></div><p id="account-last-sync" class="muted"></p>
+        <button id="account-sync" class="primary">Guardar en mi cuenta ahora</button>
+        <div id="account-conflict" hidden><h3>Dos caminos del mismo jardín</h3><p class="muted">No mezclaremos ni reemplazaremos tus recuerdos sin tu elección. Puedes descargar ambas versiones primero.</p><div class="save-actions"><button id="account-export-remote" class="secondary">Descargar copia de la cuenta</button><button id="account-export-local" class="secondary">Descargar copia de aquí</button></div><div class="save-actions"><button id="account-use-cloud" class="secondary">Recuperar la cuenta</button><button id="account-use-local" class="secondary">Conservar este dispositivo</button></div></div>
+        <div id="account-resolution" hidden><p id="account-resolution-copy"></p><button id="account-confirm" class="primary">Confirmar elección</button><button id="account-cancel" class="secondary">Cancelar</button></div>
+        <div id="account-adopt" hidden><p class="muted">Esta cuenta aún no tiene un mundo guardado. ¿Quieres llevar el jardín que jugaste sin cuenta en este navegador?</p><button id="account-adopt-guest" class="secondary">Llevar mi jardín sin cuenta</button></div>
+        <div class="settings-divider"></div><div id="account-recovery" hidden><label for="account-recovery-select">Copias de recuperación</label><select id="account-recovery-select"></select><button id="account-backups" class="secondary">Exportar copia de recuperación</button><p class="account-note">Conservamos hasta cinco versiones descartadas en este navegador. La copia exportada se puede importar desde Ajustes.</p></div>
+        <button id="account-signout" class="text-button">Cerrar sesión y volver al jardín sin cuenta</button><p class="account-note">Los cambios pendientes quedan en este dispositivo, asociados a tu cuenta. Vuelve a entrar aquí para enviarlos. Una copia local no sustituye a un respaldo externo.</p>
+      </section><p id="account-feedback" role="status" aria-live="polite"></p>`;
+    document.getElementById('app')!.append(this.dialog);
+    const $ = <T extends HTMLElement = HTMLElement>(id: string) => this.dialog.querySelector<T>(`#${id}`)!;
+    this.button.onclick = () => {
+      document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d => d.close());
+      pause(true); this.render(); this.dialog.showModal();
+    };
+    $('account-close').onclick = () => this.dialog.close();
+    this.dialog.addEventListener('close', () => pause(false));
+    $('account-login').hidden = !!user; $('account-connected').hidden = !user;
+    $('account-google').onclick = () => void this.action(async () => {
+      this.feedback('Abriendo Google…');
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
+      if (error) throw new Error('No se pudo abrir Google. Comprueba el proveedor y las URL autorizadas en Supabase.');
+    });
+    const settings = document.querySelector('#settings-dialog .save-actions')!;
+    const accountLink = document.createElement('button'); accountLink.className = 'secondary'; accountLink.textContent = '☁ Mi cuenta'; accountLink.onclick = () => this.button.click(); settings.prepend(accountLink);
+    const copy = document.querySelector('#settings-dialog .settings-divider + h3 + p');
+    if (copy) copy.textContent = user ? 'Tu jardín se guarda aquí y se sincroniza con tu cuenta. Exporta una copia para conservar un respaldo independiente.' : 'Tu jardín se guarda en este navegador. Entra en Mi cuenta para activar el guardado entre dispositivos, o exporta una copia.';
+    const saveState = document.getElementById('save-state')!;
+    saveState.setAttribute('role', 'button'); saveState.tabIndex = 0;
+    saveState.onclick = () => this.button.click(); saveState.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.button.click(); } };
+    $<HTMLFormElement>('account-email-form').onsubmit = e => { e.preventDefault(); void this.action(async () => {
+      if (Date.now() < this.resendAt) throw new Error('Espera un minuto antes de pedir otro código.');
+      this.email = $<HTMLInputElement>('account-email').value.trim();
+      const { error } = await supabase.auth.signInWithOtp({ email: this.email, options: { shouldCreateUser: true } });
+      if (error) throw new Error(error.status === 429 ? 'Espera un momento antes de pedir otro correo.' : 'No se pudo enviar el código. Revisa la conexión e inténtalo de nuevo; si continúa, avisa a quien preparó el jardín.');
+      this.resendAt = Date.now() + 60000; $('account-code-form').hidden = false; $('account-email-form').hidden = true;
+      $('account-code-hint').textContent = `Escribe el código enviado a ${this.email}.`;
+      this.feedback('Código solicitado. Revisa también la carpeta de correo no deseado.'); $('account-code').focus();
+    }); };
+    $('account-change-email').onclick = () => { $('account-email-form').hidden = false; $('account-code-form').hidden = true; this.feedback('Puedes cambiar el correo. Para otro envío, espera un minuto desde el anterior.'); };
+    $<HTMLFormElement>('account-code-form').onsubmit = e => { e.preventDefault(); void this.action(async () => {
+      const { error } = await supabase.auth.verifyOtp({ email: this.email, token: $<HTMLInputElement>('account-code').value.trim(), type: 'email' });
+      if (error) throw new Error('El código no es válido o ya venció. Revisa el correo o solicita uno nuevo.');
+      this.feedback('Tu cuenta está lista. Abriendo tu jardín…');
+    }); };
+    $('account-sync').onclick = () => void this.action(async () => { await sync?.sync(); });
+    $('account-signout').onclick = () => void this.action(async () => {
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw new Error('No se pudo cerrar la sesión. Revisa la conexión e inténtalo de nuevo.');
+    });
+    $('account-use-cloud').onclick = () => this.choose('cloud'); $('account-use-local').onclick = () => this.choose('local');
+    $('account-cancel').onclick = () => { this.chosen = null; $('account-resolution').hidden = true; };
+    $('account-confirm').onclick = () => void this.action(async () => {
+      if (!sync || !this.chosen) return;
+      const choice = this.chosen; await sync.resolve(choice);
+      if (choice === 'local') await sync.sync();
+      location.reload();
+    });
+    $('account-export-remote').onclick = () => { if (sync?.remote) downloadCopy(sync.remote.save, 'jardin-cuenta'); else this.feedback('No hay una copia descargada. Vuelve a comprobar la conexión.'); };
+    $('account-export-local').onclick = () => document.getElementById('export')!.click();
+    $('account-backups').onclick = () => {
+      const backups = sync?.backups ?? [];
+      if (!backups.length) { this.feedback('Todavía no hubo versiones reemplazadas en este dispositivo.'); return; }
+      const index = Number($<HTMLSelectElement>('account-recovery-select').value);
+      const backup = backups[index]; if (!backup) return;
+      downloadCopy(backup.save, `jardin-recuperado-${index + 1}`);
+      this.feedback('Copia preparada. Puedes importarla desde Ajustes.');
+    };
+    $('account-adopt-guest').onclick = () => void this.action(async () => {
+      if (!sync?.canAdoptGuest) throw new Error('La cuenta ya tiene cambios. Usa Exportar e Importar para elegir otra copia.');
+      const guest = new GardenRepository();
+      try { await guest.open(); const save = await guest.read(); await sync.write(save); await sync.sync(); location.reload(); }
+      finally { guest.close(); }
+    });
+    if (sync) {
+      sync.onChange = () => {
+        this.render();
+        if (sync.status === 'pending' && !this.debounce) this.debounce = window.setTimeout(() => { this.debounce = 0; void sync.sync(); }, 5000);
+      };
+      this.retry = window.setInterval(() => { if (!document.hidden) void sync.sync(); }, 120000);
+      window.addEventListener('online', () => void sync.sync(), { signal: this.abort.signal });
+      document.addEventListener('visibilitychange', () => { if (sync.pending || !document.hidden) void sync.sync(); }, { signal: this.abort.signal });
+    }
+    this.render();
+  }
+  private feedback(message: string): void { this.dialog.querySelector('#account-feedback')!.textContent = message; }
+  private choose(choice: 'cloud' | 'local'): void {
+    this.chosen = choice; this.dialog.querySelector<HTMLElement>('#account-resolution')!.hidden = false;
+    this.dialog.querySelector('#account-resolution-copy')!.textContent = choice === 'cloud'
+      ? 'Recuperarás la versión que tenga ahora tu cuenta. La partida de aquí quedará como copia local de recuperación.'
+      : 'Se enviará el jardín de este dispositivo y reemplazará la versión actual de la cuenta. Esa versión quedará como copia local de recuperación.';
+  }
+  private async action(work: () => Promise<void>): Promise<void> {
+    if (this.busy) return; this.busy = true;
+    this.dialog.querySelectorAll<HTMLButtonElement>('button:not(#account-close)').forEach(b => b.disabled = true);
+    this.feedback('Un momento…');
+    try { await work(); if (this.dialog.querySelector('#account-feedback')!.textContent === 'Un momento…') this.feedback('Listo.'); }
+    catch (e) { this.feedback(e instanceof Error ? e.message : 'No se pudo completar. Inténtalo de nuevo.'); }
+    finally { this.busy = false; this.dialog.querySelectorAll<HTMLButtonElement>('button').forEach(b => b.disabled = false); this.render(); }
+  }
+  private render(): void {
+    if (!this.user || !this.sync) return;
+    const sync = this.sync;
+    this.dialog.querySelector('#account-identity')!.textContent = this.user.email ?? 'Tu cuenta';
+    this.dialog.querySelector('#account-sync-status')!.textContent = sync.message;
+    this.dialog.querySelector('#account-last-sync')!.textContent = sync.syncedAt ? `Último envío confirmado: ${new Date(sync.syncedAt).toLocaleString()}` : 'Todavía no hay un envío confirmado desde este dispositivo.';
+    const needsChoice = sync.status === 'conflict' || sync.status === 'incoming';
+    this.dialog.querySelector<HTMLElement>('#account-sync')!.hidden = needsChoice;
+    this.dialog.querySelector<HTMLElement>('#account-conflict')!.hidden = !needsChoice;
+    this.dialog.querySelector<HTMLElement>('#account-adopt')!.hidden = !sync.canAdoptGuest;
+    this.dialog.querySelector<HTMLButtonElement>('#account-use-local')!.hidden = sync.status === 'incoming';
+    const backups = sync.backups;
+    this.dialog.querySelector<HTMLElement>('#account-recovery')!.hidden = !backups.length;
+    const selector = this.dialog.querySelector<HTMLSelectElement>('#account-recovery-select')!;
+    const previous = selector.value;
+    selector.replaceChildren(...backups.map((copy, i) => new Option(new Date(copy.at).toLocaleString(), String(i))));
+    selector.value = previous && Number(previous) < backups.length ? previous : String(backups.length - 1);
+    const labels = { checking: 'Comprobando cuenta', saved: 'Cuenta al día', pending: 'Pendiente de enviar', offline: 'Guardado aquí', error: 'Guardado aquí · revisar', conflict: 'Elegir versión', incoming: 'Recuperar mi jardín' };
+    document.getElementById('save-state')!.textContent = labels[sync.status];
+    this.button.dataset.notice = String(sync.status !== 'saved');
+    this.button.title = `Mi cuenta · ${labels[sync.status]}`;
+  }
+  dispose(): void { clearInterval(this.retry); clearTimeout(this.debounce); this.abort.abort(); if (this.sync) this.sync.onChange = () => {}; this.dialog.remove(); this.button.remove(); }
+}
