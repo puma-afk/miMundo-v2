@@ -1,3 +1,4 @@
+import type { GardenGame } from '../../application/gardenGame';
 import type { User } from '@supabase/supabase-js';
 import type { CloudSync } from '../../application/cloudSync';
 import { supabase } from '../../infrastructure/cloud/supabase';
@@ -22,7 +23,7 @@ export class AccountPanel {
   private localAt: string | null = null;
   private localError = '';
   private chosen: 'cloud' | 'local' | null = null;
-  constructor(private user: User | null, private sync: CloudSync | null, pause: (paused: boolean) => void) {
+  constructor(private user: User | null, private sync: CloudSync | null, pause: (paused: boolean) => void, private game?: GardenGame) {
     this.button = document.createElement('button');
     this.button.id = 'account'; this.button.className = 'icon-button account-button';
     this.button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 20 10a4 4 0 0 1-1 8Z"/><path d="m9 13 2 2 4-4"/></svg>'; this.button.title = 'Mi cuenta'; this.button.setAttribute('aria-label', 'Abrir mi cuenta');
@@ -36,19 +37,19 @@ export class AccountPanel {
       <div class="save-overview" id="account-save-overview" role="status"></div>
       <section id="account-login">
         <button id="account-google" class="google-login" type="button"><span aria-hidden="true">G</span> Continuar con Google <span aria-hidden="true">↗</span></button>
-        <p class="muted">Entra con tu correo para llevar tu jardín a otro dispositivo. También puedes seguir jugando sin cuenta.</p>
+        <p class="muted">Conecta tu cuenta para guardar en la nube e invitar a alguien.</p>
         <form id="account-email-form"><label for="account-email">Tu correo</label><input id="account-email" type="email" autocomplete="email" required maxlength="254" placeholder="tu@correo.com"><button class="primary" type="submit">Recibir código</button></form>
         <form id="account-code-form" hidden><p id="account-code-hint" class="muted">Revisa tu correo y escribe el código de acceso.</p><label for="account-code">Código de acceso</label><input id="account-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" minlength="6" maxlength="10" required><button class="primary" type="submit">Entrar a mi mundo</button><button class="text-button" id="account-change-email" type="button">Cambiar correo o pedir otro código</button></form>
-        <p class="account-note">El jardín sin cuenta queda separado. Al entrar podrás recuperarlo mediante una copia o elegir llevarlo a una cuenta nueva.</p>
+        <p class="account-note">Sin cuenta, tu jardín se guarda en este navegador.</p>
       </section>
       <section id="account-connected" hidden>
-        <p id="account-identity" class="account-identity"></p><div class="account-sync-card"><span id="account-sync-symbol" aria-hidden="true">✧</span><p id="account-sync-status" role="status"></p></div><p id="account-last-sync" class="muted"></p>
+        <p id="account-identity" class="account-identity"></p><form id="world-name-form"><label for="world-name">Tu nombre en el jardín</label><input id="world-name" maxlength="24" required autocomplete="nickname"><button class="secondary">Guardar nombre</button></form><button id="account-signout" class="secondary">Cerrar sesión</button>
         <button id="account-sync" class="primary">Guardar en mi cuenta ahora</button>
         <div id="account-conflict" hidden><h3>Dos caminos del mismo jardín</h3><p class="muted">No mezclaremos ni reemplazaremos tus recuerdos sin tu elección. Puedes descargar ambas versiones primero.</p><div class="save-actions"><button id="account-export-remote" class="secondary">Descargar copia de la cuenta</button><button id="account-export-local" class="secondary">Descargar copia de aquí</button></div><div class="save-actions"><button id="account-use-cloud" class="secondary">Recuperar la cuenta</button><button id="account-use-local" class="secondary">Conservar este dispositivo</button></div></div>
         <div id="account-resolution" hidden><p id="account-resolution-copy"></p><button id="account-confirm" class="primary">Confirmar elección</button><button id="account-cancel" class="secondary">Cancelar</button></div>
         <div id="account-adopt" hidden><p class="muted">Esta cuenta aún no tiene un mundo guardado. ¿Quieres llevar el jardín que jugaste sin cuenta en este navegador?</p><button id="account-adopt-guest" class="secondary">Llevar mi jardín sin cuenta</button></div>
-        <div class="settings-divider"></div><div id="account-recovery" hidden><label for="account-recovery-select">Copias de recuperación</label><select id="account-recovery-select"></select><button id="account-backups" class="secondary">Exportar copia de recuperación</button><p class="account-note">Conservamos hasta cinco versiones descartadas en este navegador. La copia exportada se puede importar desde Ajustes.</p></div>
-        <button id="account-signout" class="text-button">Cerrar sesión y volver al jardín sin cuenta</button><p class="account-note">Los cambios pendientes quedan en este dispositivo, asociados a tu cuenta. Vuelve a entrar aquí para enviarlos. Una copia local no sustituye a un respaldo externo.</p>
+        <div class="settings-divider"></div><div id="account-recovery" hidden><label for="account-recovery-select">Copias de recuperación</label><select id="account-recovery-select"></select><button id="account-backups" class="secondary">Exportar copia de recuperación</button><p class="account-note">Puedes recuperar una versión anterior desde Ajustes.</p></div>
+
       </section><p id="account-feedback" role="status" aria-live="polite"></p>`;
     document.getElementById('app')!.append(this.dialog);
     const $ = <T extends HTMLElement = HTMLElement>(id: string) => this.dialog.querySelector<T>(`#${id}`)!;
@@ -56,6 +57,21 @@ export class AccountPanel {
       document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d => d.close());
       pause(true); this.render(); this.dialog.showModal();
     };
+    const metadata = this.user?.user_metadata ?? {};
+    const suggested = [metadata.given_name, metadata.full_name, metadata.name].find(value=>typeof value==='string' && value.trim());
+    const name = this.game?.save.worldName ?? (typeof suggested==='string' ? suggested.trim().split(/\s+/)[0].slice(0,24) : 'Viajero');
+    if(user) { document.getElementById('world-brand')!.textContent='Mundo de '+name; $<HTMLInputElement>('world-name').value=name; }
+    $<HTMLFormElement>('world-name-form').onsubmit=event=>{event.preventDefault();void this.action(async()=>{await this.game?.setWorldName($<HTMLInputElement>('world-name').value);document.getElementById('world-brand')!.textContent='Mundo de '+this.game!.save.worldName;this.feedback('Nombre guardado.');});};
+    if(!user) {
+      let seen=false;try{seen=localStorage.getItem('mi-mundo-account-hint')==='seen';}catch{}
+      if(!seen){
+        const nudge=document.createElement('aside');nudge.className='account-nudge';nudge.setAttribute('aria-label','Conecta tu cuenta');
+        nudge.innerHTML='<p>Conecta tu cuenta para llevar tu mundo contigo e invitar a alguien.</p><div><button class="secondary">Conectar</button><button class="text-button">Después</button></div>';
+        const dismiss=()=>{try{localStorage.setItem('mi-mundo-account-hint','seen');}catch{}nudge.remove();};
+        nudge.querySelector<HTMLButtonElement>('.secondary')!.onclick=()=>{dismiss();this.button.click();};nudge.querySelector<HTMLButtonElement>('.text-button')!.onclick=dismiss;
+        this.button.addEventListener('click',dismiss,{signal:this.abort.signal});document.getElementById('app')!.append(nudge);
+      }
+    }
     $('account-close').onclick = () => this.dialog.close();
     this.dialog.addEventListener('close', () => pause(false));
     $('account-login').hidden = !!user; $('account-connected').hidden = !user;
@@ -171,8 +187,7 @@ export class AccountPanel {
     if (!this.user || !this.sync) return;
     const sync = this.sync;
     this.dialog.querySelector('#account-identity')!.textContent = this.user.email ?? 'Tu cuenta';
-    this.dialog.querySelector('#account-sync-status')!.textContent = sync.message;
-    this.dialog.querySelector('#account-last-sync')!.textContent = sync.syncedAt ? `Último envío confirmado: ${new Date(sync.syncedAt).toLocaleString()}` : 'Todavía no hay un envío confirmado desde este dispositivo.';
+
     const needsChoice = sync.status === 'conflict' || sync.status === 'incoming';
     this.dialog.querySelector<HTMLElement>('#account-sync')!.hidden = needsChoice;
     this.dialog.querySelector<HTMLElement>('#account-conflict')!.hidden = !needsChoice;
@@ -186,5 +201,5 @@ export class AccountPanel {
     selector.value = previous && Number(previous) < backups.length ? previous : String(backups.length - 1);
 
   }
-  dispose(): void { clearInterval(this.retry); clearTimeout(this.debounce); this.abort.abort(); if (this.sync) this.sync.onChange = () => {}; this.dialog.remove(); this.button.remove(); }
+  dispose(): void { clearInterval(this.retry); clearTimeout(this.debounce); this.abort.abort(); if (this.sync) this.sync.onChange = () => {}; document.querySelector('.account-nudge')?.remove(); this.dialog.remove(); this.button.remove(); }
 }

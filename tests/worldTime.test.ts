@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {worldTime, DAY_MS} from '../src/domain/worldTime.ts';
+import {worldTime, worldCalendar, DAY_MS} from '../src/domain/worldTime.ts';
 import {freshSave, parseSave, plantSeed, stage, GROWTH_MS} from '../src/domain/gardening.ts';
 test('sky completes a day in 30 minutes and keeps continuity across reload/absence',()=>{
  const start=1000;
@@ -19,3 +19,5 @@ test('old saves keep unknown creation date and visual days do not speed plant gr
  assert.equal(stage(plant,1000+DAY_MS),0);
  assert.equal(stage(plant,1000+GROWTH_MS),2);
 });
+
+test('fantasy years use 360 virtual days',()=>{assert.deepEqual(worldCalendar(360),{day:360,year:1});assert.deepEqual(worldCalendar(361),{day:1,year:2});});

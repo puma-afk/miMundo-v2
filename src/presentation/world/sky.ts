@@ -31,7 +31,7 @@ void main() {
   vec2 uv=d.xz/max(d.y+0.25,0.12)*1.8+vec2(time*0.004,0.0);
   float n=noise(uv)*0.57+noise(uv*2.07)*0.28+noise(uv*4.01)*0.15;
   float cloud=smoothstep(0.53,0.77,n)*smoothstep(-0.02,0.18,d.y)*(1.0-smoothstep(0.6,0.95,d.y));
-  color=mix(color,mix(vec3(1.0,0.88,0.80),vec3(0.20,0.27,0.41),night),cloud*0.78);
+  color=mix(color,mix(vec3(1.0,0.88,0.80),vec3(0.045,0.065,0.11),night),cloud*0.78);
   vec2 starUV=vec2(atan(d.z,d.x),asin(d.y))*220.0;
   float stars=step(0.997,hash(floor(starUV)))*pow(max(0.0,1.0-length(fract(starUV)-0.5)*2.0),4.0);
   color+=stars*night*smoothstep(0.0,0.25,d.y)*1.8;
@@ -72,7 +72,7 @@ export class FantasySky {
     if (this.auto) this.hour = worldTime(Date.now(), this.createdAt()).hour;
     const night = Math.min(1, Math.max(0, (Math.abs(this.hour - 12) - 5.8) / 2.2));
     const sunset = Math.max(0, 1 - Math.abs(this.hour - 17) / 3) * (1 - night);
-    const palette = this.theme === 'forest' ? ['#78a29b','#142d38','#b8d2bb','#e0b69f','#395769'] : this.theme === 'celestial' ? ['#a3b2e0','#282346','#e0d7f0','#f2bbcf','#73668e'] : ['#75b5ce','#18233e','#c9e6df','#f6c3a0','#526381'];
+    const palette = this.theme === 'forest' ? ['#78a29b','#08131d','#b8d2bb','#e0b69f','#162635'] : this.theme === 'celestial' ? ['#a3b2e0','#100d23','#e0d7f0','#f2bbcf','#282039'] : ['#75b5ce','#070e20','#c9e6df','#f6c3a0','#19263d'];
     const top = Color3.Lerp(Color3.FromHexString(palette[0]), Color3.FromHexString(palette[1]), night);
     const horizon = Color3.Lerp(Color3.Lerp(Color3.FromHexString(palette[2]), Color3.FromHexString(palette[3]), sunset), Color3.FromHexString(palette[4]), night);
     const theta = ((this.hour - 6) / 12) * Math.PI;
@@ -83,9 +83,9 @@ export class FantasySky {
     this.mat.setFloat('time', this.clock);
     this.mat.setFloat('night', night);
     this.sun.direction.copyFrom(dir.scale(-1));
-    this.sun.intensity = 1.15 - night * 0.9;
+    this.sun.intensity = 1.15 - night * 1.08;
     this.sun.diffuse = Color3.Lerp(Color3.FromHexString('#ffe1b4'), Color3.FromHexString('#8ca6ed'), night);
-    this.ambient.intensity = 0.84 - night * 0.32;
+    this.ambient.intensity = 0.84 - night * 0.65;
     this.scene.fogColor = horizon;
     this.scene.clearColor.set(horizon.r, horizon.g, horizon.b, 1);
   }

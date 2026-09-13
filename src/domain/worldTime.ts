@@ -6,3 +6,7 @@ export function worldTime(now: number, createdAt = LEGACY_EPOCH): { hour: number
   const hours = 8 + elapsed / DAY_MS * 24;
   return { hour: hours % 24, day: Math.floor(hours / 24) + 1 };
 }
+export function worldCalendar(day: number): { day: number; year: number } {
+ const index=Math.max(0,Math.floor(day)-1);
+ return {day:index%360+1,year:Math.floor(index/360)+1};
+}

@@ -1,6 +1,6 @@
 # Mi Mundo · Jardín de los Ecos
 
-Versión 1.1. Proyecto principal: esta carpeta **mundo-v2**. Se trabaja y publica desde aquí; ya no se generan carpetas de entrega.
+Versión 1.2. Proyecto principal: esta carpeta **mundo-v2**. Se trabaja y publica desde aquí; ya no se generan carpetas de entrega.
 
 ## Ejecutar y comprobar
 
@@ -24,10 +24,12 @@ Juego local: http://localhost:5174/. Cloudflare compila con `pnpm build` y publi
 - Evento asignado por correo verificado, cartas secuenciales y música privada.
 - Invitaciones por enlace/código: contenido compartido de solo lectura y comentarios por tarjeta con cuenta propia.
 
+Plan y detalles de esta actualización: [sprints 1.2](docs/SPRINTS-1.2.md). Incluye aviso de cuenta, nombre del mundo, invitaciones con WhatsApp, noche más oscura, año virtual y avatar personalizable.
+
 ## Antes de publicar
 
 1. Lee [GitHub y despliegue](docs/GITHUB-Y-DESPLIEGUE.md).
-2. Ejecuta las migraciones pendientes de Supabase. La revisión añadió **009_comment_cooldown.sql**: corrige un bypass del límite de envío al borrar comentarios.
+2. Ejecuta las migraciones pendientes de Supabase. Esta actualización añade **010_shared_world_name.sql** para mostrar el nombre elegido en visitas. La revisión añadió **009_comment_cooldown.sql**: corrige un bypass del límite de envío al borrar comentarios.
 3. Consulta [la revisión de seguridad](docs/REVISION-SEGURIDAD-1.1.md) y [activación de visitas](docs/ACTIVAR-VISITAS-1.1.md).
 4. Prueba el retorno real de Google y una visita tras desplegar. Las pruebas de navegador automatizadas no usan las cuentas personales.
 

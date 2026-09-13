@@ -32,3 +32,5 @@ Mantén Cloudflare Pages conectado a miMundo-v2. Comando de compilación: pnpm b
 Las migraciones no se ejecutan por subir a GitHub. Si ya aplicaste 007 y 008, falta 009_comment_cooldown.sql, añadido por la revisión. No ejecutes de nuevo el SQL privado de asignación para esta actualización.
 
 Después de publicar, verifica Google, guardado y visita desde móvil. La revisión local no publica ni cambia Cloudflare automáticamente.
+
+Actualización 1.2: si las migraciones hasta 009 ya están aplicadas, ejecuta solo 010_shared_world_name.sql para que las invitaciones incluyan el nombre elegido. El resto de mejoras de interfaz/avatar no necesita cambios de esquema adicionales.

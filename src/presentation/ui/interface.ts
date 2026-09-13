@@ -1,4 +1,6 @@
-import { worldTime } from '../../domain/worldTime';
+import { defaultAvatarStyle } from '../../domain/avatarStyle';
+import type { AvatarStyle } from '../../domain/avatarStyle';
+import { worldTime, worldCalendar } from '../../domain/worldTime';
 import { forestAchievements, canVisitForest } from '../../domain/achievements';
 import { storySymbol } from '../memories/storyArt';
 import { AvatarPreview } from '../player/avatarPreview';
@@ -47,7 +49,7 @@ export class GameInterface {
     this.root.innerHTML = `
       <div class="vignette"></div><button id="target-bubble" class="target-bubble" hidden></button><div id="care-feedback" class="care-feedback" aria-hidden="true" hidden>♡</div>
       <header class="topbar">
-        <a class="brand" href="#" aria-label="Mi Mundo, volver a la entrada"><span class="brand-symbol">${icon('leaf')}</span><span>mi mundo<span class="brand-sub">UN LUGAR PARA VOLVER</span></span></a>
+        <a class="brand" href="#" aria-label="Mi Mundo, volver a la entrada"><span class="brand-symbol">${icon('leaf')}</span><span><span id="world-brand">mi mundo</span><span class="brand-sub">UN LUGAR PARA VOLVER</span></span></a>
         <details class="sky-status"><summary aria-label="Hora del mundo y fecha real"><span id="sky-symbol">${icon('sun')}</span><span id="clock">08:00</span></summary><div class="world-time-details"><small>EN TU MUNDO</small><strong id="sky-name"></strong><span id="world-day"></span><small>EN LA VIDA REAL</small><time id="real-date"></time><span id="garden-age"></span></div></details>
         <nav class="toolbar" aria-label="Herramientas del jardín">
           <button class="icon-button" id="album" title="Recuerdos" aria-label="Abrir recuerdos">${icon('book')}</button>
@@ -119,8 +121,10 @@ export class GameInterface {
       <dialog id="avatar-dialog" class="settings-dialog" aria-labelledby="avatar-title">
         <button class="dialog-close icon-button" data-close aria-label="Cerrar avatar">${icon('close')}</button>
         <div class="eyebrow">QUIÉN RECORRE TU MUNDO</div><h2 id="avatar-title">Tu viajero</h2>
-        <div class="avatar-stage"><canvas id="avatar-preview" aria-label="Vista previa 3D de tu avatar"></canvas><div class="avatar-turn"><button id="avatar-left" class="secondary" aria-label="Girar avatar a la izquierda">↶</button><button id="avatar-right" class="secondary" aria-label="Girar avatar a la derecha">↷</button></div></div><p id="avatar-preview-status" class="muted">Elige con quién explorar la isla.</p>
+        <div class="avatar-stage"><canvas id="avatar-preview" aria-label="Vista previa 3D de tu avatar"></canvas><div class="avatar-turn"><button id="avatar-left" class="secondary" aria-label="Girar avatar a la izquierda">${icon('previous')}</button><button id="avatar-right" class="secondary" aria-label="Girar avatar a la derecha">${icon('next')}</button></div></div><p id="avatar-preview-status" class="muted">Elige con quién explorar la isla.</p>
         <label class="setting-row" for="avatar-choice">Tu avatar<select id="avatar-choice"><option value="woman">Mujer · viajera</option><option value="man">Hombre · viajero</option></select></label>
+        <div class="avatar-customize"><label>Piel<select id="avatar-skin"><option value="light">Clara</option><option value="warm">Cálida</option><option value="deep">Morena</option></select></label><label>Ropa<select id="avatar-robe"><option value="teal">Lago</option><option value="lavender">Lavanda</option><option value="rose">Rosa</option></select></label><label>Cabello<select id="avatar-hair"><option value="auto">Original</option><option value="short">Corto</option><option value="long">Largo</option><option value="braid">Trenza</option></select></label></div><div class="save-actions"><button id="avatar-save" class="primary">Guardar apariencia</button><button id="avatar-wave" class="secondary">Saludar</button></div>
+
         <p class="muted">Tu elección forma parte del guardado de tu jardín.</p>
       </dialog>
       <dialog id="settings-dialog" class="settings-dialog">
@@ -227,19 +231,20 @@ export class GameInterface {
     questPanel.addEventListener('toggle', syncDock); syncDock();
     $('nav-explore').onclick = () => { questPanel.open = false; world.input.clear(); syncDock(); };
     $('nav-garden').onclick = () => { questPanel.open = !questPanel.open; syncDock(); };
-    $('nav-avatar').onclick = () => { this.openDialog($('avatar-dialog')); try { this.avatarPreview ??= new AvatarPreview($<HTMLCanvasElement>('avatar-preview')); this.avatarPreview.show(world.avatar.appearance); } catch { $('avatar-preview-status').textContent = 'La vista previa no está disponible. Puedes cambiar tu avatar igualmente.'; } };
+    $('nav-avatar').onclick = () => { this.openDialog($('avatar-dialog')); try { this.avatarPreview ??= new AvatarPreview($<HTMLCanvasElement>('avatar-preview')); this.avatarPreview.show(world.avatar.appearance,world.avatar.style); resetAvatarDraft(); } catch { $('avatar-preview-status').textContent = 'La vista previa no está disponible. Puedes cambiar tu avatar igualmente.'; } };
     $('avatar-left').onclick = () => this.avatarPreview?.turn(-.5); $('avatar-right').onclick = () => this.avatarPreview?.turn(.5);
     $('settings').onclick = () => this.openDialog($('settings-dialog'));
     const avatarChoice = $<HTMLSelectElement>('avatar-choice');
     world.avatar.setAppearance(game.save.avatar ?? 'man');
     avatarChoice.value = world.avatar.appearance;
-    avatarChoice.onchange = async () => {
-      const appearance = avatarChoice.value === 'woman' ? 'woman' : 'man';
-      avatarChoice.disabled = true;
-      try { await game.setAvatar(appearance); world.avatar.setAppearance(appearance); this.avatarPreview?.show(appearance); }
-      catch (e) { avatarChoice.value = world.avatar.appearance; this.toast(this.error(e)); }
-      finally { avatarChoice.disabled = false; }
-    };
+    world.avatar.setStyle(game.save.avatarStyle ?? defaultAvatarStyle);
+    const styleDraft=():AvatarStyle=>({skin:$<HTMLSelectElement>('avatar-skin').value as AvatarStyle['skin'],robe:$<HTMLSelectElement>('avatar-robe').value as AvatarStyle['robe'],hair:$<HTMLSelectElement>('avatar-hair').value as AvatarStyle['hair']});
+    const resetAvatarDraft=()=>{avatarChoice.value=world.avatar.appearance;for(const key of ['skin','robe','hair'] as const)$<HTMLSelectElement>('avatar-'+key).value=world.avatar.style[key];$('avatar-preview-status').textContent='Elige tu estilo y guarda cuando te guste.';};
+    resetAvatarDraft();
+    const previewDraft=()=>{this.avatarPreview?.show(avatarChoice.value==='woman'?'woman':'man',styleDraft());$('avatar-preview-status').textContent='Vista previa · aún sin guardar';};
+    avatarChoice.onchange=previewDraft;for(const key of ['skin','robe','hair'])$('avatar-'+key).onchange=previewDraft;
+    $('avatar-save').onclick=async()=>{if(this.visiting)return;const appearance=avatarChoice.value==='woman'?'woman':'man',style=styleDraft();const button=$<HTMLButtonElement>('avatar-save');button.disabled=true;try{await game.setAvatarLook(appearance,style);world.avatar.setAppearance(appearance);world.avatar.setStyle(style);$('avatar-preview-status').textContent='Tu apariencia está guardada.';}catch(e){$('avatar-preview-status').textContent=this.error(e);}finally{button.disabled=false;}};
+    $('avatar-wave').onclick=()=>{world.avatar.wave();$<HTMLDialogElement>('avatar-dialog').close();};
     $('sound').onclick = () => this.openDialog($('music-dialog'));
     const tracks = $<HTMLSelectElement>('music-track');
     musicTracks.forEach(track => { const option = document.createElement('option'); option.value = track.id; option.textContent = track.title; tracks.append(option); });
@@ -282,7 +287,7 @@ export class GameInterface {
     $('cancel-import').onclick = () => { this.importPending = false; this.importData = null; $('import-confirm').hidden = true; };
     $('confirm-import').onclick = async () => {
       if (!this.importPending) return;
-      try { await game.import(this.importData); world.avatar.setAppearance(game.save.avatar ?? 'man'); avatarChoice.value = world.avatar.appearance; if ((game.save.currentIsland === 'forest') !== world.forest) {location.reload();return;} world.refreshPlants(); this.refresh(); this.toast('Tu jardín ha vuelto a casa.'); this.importPending = false; this.importData = null; $('import-confirm').hidden = true; }
+      try { await game.import(this.importData); world.avatar.setAppearance(game.save.avatar ?? 'man'); world.avatar.setStyle(game.save.avatarStyle ?? defaultAvatarStyle); avatarChoice.value = world.avatar.appearance; if ((game.save.currentIsland === 'forest') !== world.forest) {location.reload();return;} world.refreshPlants(); this.refresh(); this.toast('Tu jardín ha vuelto a casa.'); this.importPending = false; this.importData = null; $('import-confirm').hidden = true; }
       catch (e) { this.toast(this.error(e)); }
     };
     world.input.bindJoystick($('joystick'), $('joystick-knob'));
@@ -413,7 +418,8 @@ export class GameInterface {
     document.getElementById('sky-symbol')!.innerHTML = icon(night ? 'moon' : 'sun');
     document.getElementById('sky-name')!.textContent = night ? 'Bajo las estrellas' : hour < 9 ? 'Amanecer' : hour >= 16 ? 'Atardecer' : 'Un día para soñar';
     const now = new Date();
-    document.getElementById('world-day')!.textContent = 'Día ' + worldTime(now.getTime(), this.game.save.createdAt).day + ' del cielo';
+    const calendar=worldCalendar(worldTime(now.getTime(),this.game.save.createdAt).day);
+    document.getElementById('world-day')!.textContent='Día '+calendar.day+' · Año '+calendar.year;
     const real = document.getElementById('real-date') as HTMLTimeElement;
     real.dateTime = now.toISOString();
     real.textContent = new Intl.DateTimeFormat('es', {dateStyle:'long', timeStyle:'short'}).format(now);

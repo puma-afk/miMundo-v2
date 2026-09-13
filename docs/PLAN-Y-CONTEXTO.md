@@ -1,3 +1,5 @@
+> ACTUALIZACIÓN 1.2: ver SPRINTS-1.2.md. Cuenta simplificada, nombre público elegido en la partida, invitaciones/WhatsApp, avatar personalizable con confirmación y calendario de 360 días virtuales. Aplicar SQL 010 para el nombre compartido. Sin publicación automática.
+
 > ESTADO VIGENTE 12/09/2026: versión 1.1, sprints 1–4 implementados. Carpeta principal mundo-v2; no crear copias de entrega. Ver README.md, GITHUB-Y-DESPLIEGUE.md y REVISION-SEGURIDAD-1.1.md. Nueva migración 009 para el límite de comentarios; aplicar manualmente. Lo que sigue es contexto histórico.
 
 > Estado más reciente: el regalo dejó de ser global. Personalización y carta se obtienen de world_gifts con RLS por UUID; configuración real solo en private-gifts (ignorado). Búsqueda de cuatro pistas implementada y probada. Ver REGALOS-PRIVADOS.md. Google, asignación del UUID, audio de las canciones y visitas siguen pendientes. No publicar la entrega antigua.

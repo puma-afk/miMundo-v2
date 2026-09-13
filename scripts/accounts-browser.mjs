@@ -64,6 +64,11 @@ try {
   await ready(); await page.waitForFunction(() => window.__MI_MUNDO_DEV__?.game.save.messages?.['luna-01'] === 'Otro dispositivo');
   await page.locator('#account').click();
   assert.equal(await page.evaluate(() => window.__MI_MUNDO_DEV__.sync.backups.at(-1).save.messages['luna-01']), 'Este dispositivo');
+  await page.locator('#world-name').fill('Luna');await page.locator('#world-name-form button').click();
+  await page.waitForFunction(()=>window.__MI_MUNDO_DEV__.game.save.worldName==='Luna');
+  assert.equal(await page.locator('#world-brand').textContent(),'Mundo de Luna');
+  assert.equal(await page.locator('#account-sync-status,#account-last-sync').count(),0);
+  await page.screenshot({path:'artifacts/account-clean-mobile.png'});
   await page.locator('#account-signout').click();
   await page.waitForFunction(() => window.__MI_MUNDO_DEV__ && !window.__MI_MUNDO_DEV__.sync); await ready();
   assert.ok(await page.evaluate(() => window.__MI_MUNDO_DEV__.game.save.plants['luna-01']));

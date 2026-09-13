@@ -1,3 +1,5 @@
+import { validAvatarStyle } from './avatarStyle.ts';
+import type { AvatarStyle } from './avatarStyle.ts';
 export type Plant = {
   id: string;
   definitionId: 'moonflower' | 'starfern';
@@ -6,6 +8,8 @@ export type Plant = {
 };
 
 export type Save = {
+  worldName?: string;
+  avatarStyle?: AvatarStyle;
   createdAt?: number;
   schemaVersion: 1;
   avatar?: 'woman' | 'man';
@@ -45,6 +49,8 @@ export function waterPlant(save: Save, plotId: string, now: number): Save {
 export function parseSave(input: unknown, plotIds: readonly string[]): Save {
   if (!input || typeof input !== 'object') throw new Error('El archivo no contiene un jardín válido.');
   const s = input as Partial<Save>;
+  if(s.worldName !== undefined && (typeof s.worldName !== 'string' || !s.worldName.trim() || s.worldName.length>24)) throw new Error('El nombre admite de 1 a 24 caracteres.');
+  if(s.avatarStyle !== undefined && !validAvatarStyle(s.avatarStyle)) throw new Error('Aspecto de avatar no válido.');
   if (s.createdAt !== undefined && (!Number.isFinite(s.createdAt) || s.createdAt < 0)) throw new Error('Fecha del jardín no válida.');
   if (s.schemaVersion !== 1) throw new Error('Esta versión de la partida no es compatible. Conserva tu copia.');
   if (s.avatar !== undefined && s.avatar !== 'woman' && s.avatar !== 'man') throw new Error('Avatar no válido.');

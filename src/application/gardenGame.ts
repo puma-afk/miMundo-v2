@@ -1,3 +1,5 @@
+import { validAvatarStyle } from '../domain/avatarStyle.ts';
+import type { AvatarStyle } from '../domain/avatarStyle.ts';
 import { forestPlots } from '../content/islands.ts';
 import { canVisitForest } from '../domain/achievements.ts';
 import { freshSave, plantSeed, waterPlant, stage, parseSave } from '../domain/gardening.ts';
@@ -15,6 +17,8 @@ export class GardenGame {
   private now: () => number;
   constructor(repository: SavePort, now = () => Date.now()) { this.repository = repository; this.now = now; }
   async load(): Promise<void> { this.save = await this.repository.read(); }
+  async setWorldName(name: string): Promise<void> { const value=name.trim(); if(!value || value.length>24)throw new Error('Escribe un nombre de 1 a 24 caracteres.'); await this.commit({...this.save,worldName:value}); }
+  async setAvatarLook(avatar: 'woman'|'man', avatarStyle: AvatarStyle): Promise<void> { if((avatar!=='woman' && avatar!=='man') || !validAvatarStyle(avatarStyle))throw new Error('Aspecto no válido.'); await this.commit({...this.save,avatar,avatarStyle}); }
   async setAvatar(avatar: 'woman' | 'man'): Promise<void> { await this.commit({ ...this.save, avatar }); }
   async saveGiftResponse(id: string, response: string): Promise<void> {
     const progress = this.save.giftProgress;

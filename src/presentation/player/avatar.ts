@@ -1,8 +1,26 @@
-import { MeshBuilder, Scene, TransformNode, Vector3 } from '../engine';
+import { defaultAvatarStyle } from '../../domain/avatarStyle';
+import type { AvatarStyle } from '../../domain/avatarStyle';
+import { Color3, StandardMaterial, MeshBuilder, Scene, TransformNode, Vector3 } from '../engine';
 import { material, orb } from '../world/materials';
 
 export class Avatar {
   readonly root: TransformNode;
+  private skinMaterial!: StandardMaterial;
+  private robeMaterial!: StandardMaterial;
+  private cape!: TransformNode;
+  private hairParts: TransformNode[] = [];
+  private waveTime=0;
+  style: AvatarStyle = {...defaultAvatarStyle};
+  wave(): void { this.waveTime=1.8; }
+  setStyle(style: AvatarStyle): void {
+    this.style={...style};
+    this.skinMaterial.diffuseColor=Color3.FromHexString({light:'#f1d0b4',warm:'#cc9873',deep:'#83553f'}[style.skin]);
+    this.robeMaterial.diffuseColor=Color3.FromHexString({teal:'#366d79',lavender:'#79669f',rose:'#ae627f'}[style.robe]);
+    this.skinMaterial.emissiveColor=this.skinMaterial.diffuseColor.scale(.07);
+    this.robeMaterial.emissiveColor=this.robeMaterial.diffuseColor.scale(.09);
+    const hair=style.hair==='auto' ? (this.appearance==='woman'?'braid':'short') : style.hair;
+    this.hairParts.forEach((part,index)=>part.setEnabled(index===0 ? hair!=='short' : hair==='braid'));
+  }
   private leftLeg: TransformNode;
   private rightLeg: TransformNode;
   private leftArm: TransformNode;
@@ -21,22 +39,30 @@ export class Avatar {
   setAppearance(value: 'woman' | 'man'): void {
     this.appearance = value;
     this.femaleParts.forEach(part => part.setEnabled(value === 'woman'));
+    if(this.skinMaterial)this.setStyle(this.style);
   }
   constructor(scene: Scene) {
     this.root = new TransformNode('traveler', scene);
-    const robe = material(scene, 'traveler-teal', '#366d79');
+    const robe = this.robeMaterial = material(scene, 'traveler-teal', '#366d79');
     const cloak = material(scene, 'traveler-ivory', '#efe0bf');
-    const skin = material(scene, 'traveler-skin', '#dfb795');
+    const skin = this.skinMaterial = material(scene, 'traveler-skin', '#dfb795');
     const hair = material(scene, 'traveler-hair', '#5e485b');
     const boots = material(scene, 'traveler-boots', '#64586b');
     const make = (name: string, p: Vector3, s: Vector3, mat = robe) => { const m = orb(scene, name, p, s, mat, 12); m.parent = this.root; return m; };
     make('tunic', new Vector3(0, 0.84, 0), new Vector3(0.23, 0.4, 0.18));
-    make('cape', new Vector3(0, 0.85, -0.13), new Vector3(0.31, 0.43, 0.11), cloak);
+    this.cape=make('cape', new Vector3(0, 0.85, -0.13), new Vector3(0.31, 0.43, 0.11), cloak);
     make('head', new Vector3(0, 1.35, 0.015), new Vector3(0.21, 0.24, 0.20), skin);
     make('hair', new Vector3(0, 1.46, -0.03), new Vector3(0.23, 0.18, 0.22), hair);
-    this.femaleParts.push(make('long-hair', new Vector3(0, 1.16, -0.15), new Vector3(0.24, 0.32, 0.13), hair));
-    this.femaleParts.push(make('braid', new Vector3(0.19, 1.08, 0.1), new Vector3(0.07, 0.27, 0.07), hair));
+    this.hairParts.push(make('long-hair', new Vector3(0, 1.16, -0.15), new Vector3(0.24, 0.32, 0.13), hair));
+    this.hairParts.push(make('braid', new Vector3(0.19, 1.08, 0.1), new Vector3(0.07, 0.27, 0.07), hair));
     this.femaleParts.push(make('dress', new Vector3(0, 0.62, 0), new Vector3(0.30, 0.27, 0.23), robe));
+    const eyes=material(scene,'traveler-eyes','#252638');
+    make('eye-left',new Vector3(-.075,1.37,.199),new Vector3(.029,.038,.018),eyes);
+    make('eye-right',new Vector3(.075,1.37,.199),new Vector3(.029,.038,.018),eyes);
+    make('nose',new Vector3(0,1.32,.213),new Vector3(.029,.03,.027),skin);
+    make('smile',new Vector3(0,1.27,.195),new Vector3(.041,.01,.012),eyes);
+    const gold=material(scene,'traveler-clasp','#dcb974',.12);
+    make('cape-clasp',new Vector3(0,1.105,.225),new Vector3(.04,.05,.022),gold);
     this.setAppearance('man');
     make('scarf', new Vector3(0, 1.14, 0), new Vector3(0.25, 0.09, 0.22), cloak);
     const limb = (name: string, x: number, y: number, length: number, arm: boolean) => {
@@ -62,6 +88,9 @@ export class Avatar {
   }
   animate(dt: number, moving: boolean, reducedMotion: boolean): void {
     this.time += dt;
+    this.waveTime = reducedMotion || moving ? 0 : Math.max(0,this.waveTime-dt);
+    this.cape.rotation.x=reducedMotion?0:Math.sin(this.time*(moving?7:2))*(moving?.075:.025);
+    this.leftArm.rotation.z=0;this.rightArm.rotation.z=0;
     if (reducedMotion || moving) this.careTime = 0;
     this.careTime = Math.max(0,this.careTime-dt);
     const active=this.caring, water=active && this.careKind==='water';
@@ -75,6 +104,8 @@ export class Avatar {
 
     const swing = moving && !reducedMotion ? Math.sin(this.time * 11) * 0.5 : 0;
     this.leftLeg.rotation.x = swing; this.rightLeg.rotation.x = -swing;
-    this.leftArm.rotation.x = -swing * 0.7; this.rightArm.rotation.x = swing * 0.7;
+    const breath=!moving&&!reducedMotion?Math.sin(this.time*2)*.035:0;
+    this.leftArm.rotation.x = -swing * 0.7+breath; this.rightArm.rotation.x = swing * 0.7+breath;
+    if(this.waveTime>0){this.rightArm.rotation.z=-2.3+Math.sin(this.time*14)*.18;this.rightArm.rotation.x=-.3;}
   }
 }

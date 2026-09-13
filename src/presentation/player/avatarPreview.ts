@@ -1,3 +1,4 @@
+import type { AvatarStyle } from '../../domain/avatarStyle';
 import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3 } from '../engine';
 import { Avatar } from './avatar';
 /** Render only when opened, resized or changed; no second animation loop. */
@@ -16,7 +17,7 @@ export class AvatarPreview {
     this.avatar = new Avatar(this.scene);
     this.resize = new ResizeObserver(() => this.draw()); this.resize.observe(canvas);
   }
-  show(appearance: 'woman' | 'man'): void { this.avatar.setAppearance(appearance); this.draw(); }
+  show(appearance: 'woman' | 'man', style?: AvatarStyle): void { this.avatar.setAppearance(appearance); if(style)this.avatar.setStyle(style); this.draw(); }
   turn(amount: number): void { this.avatar.root.rotation.y += amount; this.draw(); }
   private draw(): void { this.engine.resize(); this.scene.render(); }
   dispose(): void { this.resize.disconnect(); this.scene.dispose(); this.engine.dispose(); }

@@ -7,10 +7,10 @@ try {
   const page=await browser.newPage({viewport:{width,height:844},reducedMotion:'reduce'});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const ready=async()=>{await page.locator('#intro-title').waitFor({state:'visible',timeout:120000});await page.locator('#loading').waitFor({state:'detached',timeout:120000});};
-  await page.goto('http://127.0.0.1:5174');await ready();await page.locator('#enter').click();
+  await page.goto('http://127.0.0.1:5174');await ready();await page.locator('.account-nudge .text-button').click();await page.locator('#enter').click();
   assert.equal(await page.locator('.sky-status').isVisible(),true);
   await page.locator('.sky-status summary').click();
-  assert.match(await page.locator('#world-day').textContent(),/Día 1 del cielo/);
+  assert.match(await page.locator('#world-day').textContent(),/Día 1 · Año 1/);
   assert.ok(await page.locator('#real-date').getAttribute('datetime'));
   await page.screenshot({path:`artifacts/world-clock-${width}.png`});
   await page.locator('.sky-status summary').click();await page.locator('#settings').click();

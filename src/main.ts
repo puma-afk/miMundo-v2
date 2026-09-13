@@ -36,6 +36,7 @@ async function start(): Promise<void> {
     const world = new GardenWorld(document.getElementById('world') as HTMLCanvasElement, game);
     const ui = new GameInterface(world, game, sharedGift, true, {token:data.token});
     document.getElementById('app')!.classList.add('visiting');
+    if(snapshot.worldName)document.getElementById('world-brand')!.textContent='Mundo de '+snapshot.worldName;
     document.getElementById('intro-title')!.textContent = 'Te han abierto las puertas del jardín';
     const intro = document.querySelector('.intro p'); if (intro) intro.textContent = 'Pasea entre las nubes. Esta visita no cambia el mundo de su propietaria.';
     const back = document.createElement('a'); back.className = 'visit-home'; back.href = location.origin + '/'; back.innerHTML = navIcon('exit') + '<span>Salir de la visita</span>'; document.querySelector('.toolbar')!.append(back);
@@ -75,7 +76,7 @@ async function start(): Promise<void> {
   const gift = await loadPrivateGift(user?.id ?? null).catch(() => null);
   if (gift) world.configureGift(gift.id);
   const ui = new GameInterface(world, game, gift, false, user ? {} : undefined);
-  account = preview ? null : new AccountPanel(user, sync, paused => { world.paused = paused; world.previewSky = false; world.input.clear(); });
+  account = preview ? null : new AccountPanel(user, sync, paused => { world.paused = paused; world.previewSky = false; world.input.clear(); }, game);
   account?.updateLocal(storageError ? 'error' : 'ready', savedAt(), storageError ?? '');
   if (import.meta.env.DEV && preview) {
     const cloud = document.createElement('button'); cloud.className = 'icon-button'; cloud.id = 'preview-account'; cloud.textContent = '☁'; cloud.title = 'Mi cuenta y guardado en nube'; cloud.setAttribute('aria-label', 'Volver a mi cuenta y guardado en nube');
@@ -88,7 +89,7 @@ async function start(): Promise<void> {
     previewBar.append(label, restart, leave); document.getElementById('app')!.append(previewBar);
   }
   if (import.meta.env.DEV && !preview) {
-    const test = document.createElement('a'); test.className = 'preview-entry'; test.href = location.origin + '/?gift-preview=1'; test.innerHTML = navIcon('preview') + '<span>Probar evento</span>'; document.querySelector('.toolbar')!.append(test);
+    const test = document.createElement('a'); test.className = 'preview-entry'; test.setAttribute('aria-label','Probar evento'); test.href = location.origin + '/?gift-preview=1'; test.innerHTML = navIcon('preview') + '<span>Probar evento</span>'; document.querySelector('.toolbar')!.append(test);
   }
   if (!preview) mountVisitSharing(paused => { world.paused = paused; world.input.clear(); });
   // Development-only inspection for browser tests; excluded from production builds.
