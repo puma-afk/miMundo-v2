@@ -8,3 +8,9 @@ artifacts/
 !.env.example
 assets-source/
 private-gifts/
+
+# --- Contexto y agentes ---
+.claude/settings.local.json
+.obsidian/
+salidas/tmp/
+*.log
